@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:layout_width="fill_parent" android:layout_height="fill_parent"
+	android:padding="5px" android:orientation="vertical">
+	<TextView android:id="@+id/tvRecURL" android:layout_height="wrap_content"
+			android:text="Receiver URI" android:padding="2px" android:textSize="6pt"
+			android:layout_width="fill_parent" android:inputType="textUri" />
+	<EditText android:layout_height="wrap_content"
+			android:layout_width="fill_parent" android:id="@+id/etRecURL"
+			android:textSize="6pt" android:text="Android" android:inputType="textUri" />
+	<Button android:layout_height="wrap_content" android:id="@+id/StartPDV"
+			android:layout_width="fill_parent" android:text="Start PDV" />
+		
+	<LinearLayout android:id="@+id/LinearLayout1"
+		android:layout_height="wrap_content" android:layout_width="fill_parent"
+		android:layout_marginTop="5px" android:layout_marginBottom="5px"
+		android:orientation="vertical" android:background="#aaaaaa"
+		android:padding="5px">
+
+		<TextView android:id="@+id/tvAuth" android:layout_height="wrap_content"
+			android:text="Authenticator" android:padding="2px" android:textSize="6pt"
+			android:layout_width="fill_parent" />
+		<EditText android:layout_height="wrap_content"
+			android:layout_width="fill_parent" android:id="@+id/etAuth"
+			android:textSize="6pt" android:text="Android" />
+		<Button android:layout_height="wrap_content" android:id="@+id/SetupStream"
+			android:layout_width="fill_parent" android:text="SetUp Stream" />
+			
+	</LinearLayout>
+
+	<LinearLayout android:layout_width="fill_parent"
+		android:id="@+id/linearLayout2" android:layout_height="wrap_content"
+		android:orientation="horizontal">
+		
+		<Button android:text="RequestPull" android:layout_height="45dip"
+			android:id="@+id/btnRequestPull" android:layout_width="wrap_content"
+			android:layout_weight="1" />
+	</LinearLayout>
+	<TextView android:layout_height="wrap_content" android:text=""
+		android:id="@+id/tvStatus" android:layout_width="fill_parent" />
+</LinearLayout>
