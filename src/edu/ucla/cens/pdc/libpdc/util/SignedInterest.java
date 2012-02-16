@@ -20,7 +20,7 @@ import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
-import org.bouncycastle.util.Arrays;
+import org.spongycastle.util.Arrays;
 import org.ccnx.ccn.protocol.ContentName;
 
 /**

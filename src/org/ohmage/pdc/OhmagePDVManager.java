@@ -5,6 +5,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.logging.Level;
 
+import org.spongycastle.jce.provider.asymmetric.ec.KeyPairGenerator;
 import org.ccnx.android.ccnlib.CCNxConfiguration;
 import org.ccnx.android.ccnlib.CCNxServiceCallback;
 import org.ccnx.android.ccnlib.CCNxServiceControl;
@@ -16,6 +17,7 @@ import org.ccnx.ccn.profiles.ccnd.CCNDaemonException;
 import org.ccnx.ccn.profiles.ccnd.SimpleFaceControl;
 import org.ccnx.ccn.protocol.ContentName;
 import org.ccnx.ccn.protocol.MalformedContentNameStringException;
+import org.ccnx.ccn.protocol.PublisherPublicKeyDigest;
 
 import org.ohmage.OhmageApplication;
 import org.ohmage.SharedPreferencesHelper;
@@ -103,36 +105,56 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 	public static OhmagePDVManager getInstance(OhmageApplication app,
 			OhmagePDVManagerCallback callback)
 	{
-		if (_ohmage_NDN_manager == null) {
+		if (_ohmage_PDV_manager == null) {
 			createNewInstance(app, callback);
 		}
 
-		return _ohmage_NDN_manager;
+		return _ohmage_PDV_manager ;
 	}
 	
 	public static OhmagePDVManager getInstance()
 	{
-		assert _ohmage_NDN_manager != null : 
+		assert _ohmage_PDV_manager != null : 
 			"Ohmage NDN Manager not initialized";
-		return _ohmage_NDN_manager;
+		return _ohmage_PDV_manager ;
 	}
 	
 	public static OhmagePDVManager createNewInstance(OhmageApplication app,
 			OhmagePDVManagerCallback callback)
 	{
-		if (_ohmage_NDN_manager == null) {
-			_ohmage_NDN_manager = new OhmagePDVManager(app, callback);
+		if (_ohmage_PDV_manager == null) {
+			_ohmage_PDV_manager = new OhmagePDVManager(app, callback);
 		}
 
-		return _ohmage_NDN_manager;
+		return _ohmage_PDV_manager ;
+	}
+	
+	public static PublisherPublicKeyDigest getConfigurationDigest() {
+		return _configuration_digest;
+		
+	}
+	
+	public ContentName getConfigKeyLocator() {
+		return _config_keyname;
 	}
 	
 	public void create()
 	{
 		PDCReceiver _pdc_receiver = null;
+		PublisherPublicKeyDigest digest = null;
 		try {
-			org.ccnx.ccn.impl.support.Log.setDefaultLevel(
-					org.ccnx.ccn.impl.support.Log.FAC_ALL, Level.INFO);
+			digest = new PublisherPublicKeyDigest(
+					"V4W7ifzgwncXbD/oi4oJZCWZzEC/eFuk7oT0+peBSOI=");
+			_configuration_digest = new PublisherPublicKeyDigest(
+					"Af1ryRDFXskL4iLT7htVyfdfGE+i6kSdfZv71VWbwHM=");
+			
+		} catch (IOException e2) {
+			// TODO Auto-generated catch block
+			Log.e(TAG, e2.toString());
+		}
+		try {
+			//org.ccnx.ccn.impl.support.Log.setDefaultLevel(
+			//		org.ccnx.ccn.impl.support.Log.FAC_ALL, Level.FINE);
 
 			GlobalConfig config = GlobalConfig.loadState();
 			assert config == null;
@@ -141,7 +163,7 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 				config = GlobalConfig.getInstance();
 				config.setRoot(ContentName.parse(_namespace));
 				Log.i(TAG, _namespace);
-
+				
 				config.addApplicationOnPhone(_ohmage_application);
 				
 				// Setup the Application Object
@@ -156,23 +178,32 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 						config.getCCNHandle(),
 						_ohmage_application,
 						_mobility_data_stream + usernamehash);
+				// Create symmetric key for the stream
+				_stream.getTransport().getEncryptor().generateNewKey();
 				assert _stream != null;
 				_ohmage_application.addDataStream(_stream);
 				_pdc_receiver = new PDCReceiver(
 						_rec_url);
+				_pdc_receiver.setPublickeyDigest(digest);
 				_stream.addReceiver(_pdc_receiver);
 				
-				_stream = null;
+				/*_stream = null;
 				_stream = new DataStream(
 						config.getCCNHandle(),
 						_ohmage_application,
 						_survey_response_stream + usernamehash);
+				_stream.getTransport().getEncryptor().generateNewKey();
 				assert _stream != null;
 				_ohmage_application.addDataStream(_stream);
 				_pdc_receiver = new PDCReceiver(
 						_rec_url);
 				_stream.addReceiver(_pdc_receiver);
-				
+				_pdc_receiver.setPublickeyDigest(digest);
+				*/
+				// Giving name to config key
+				_config_keyname = ContentName.fromURI(_rec_url).
+						append(getHashedDeviceId()).append("manage").
+						append("configuration_key");
 				// config.storeStateRecursive();
 				Log.i(TAG, "New Config.");
 			} else
@@ -237,8 +268,6 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 					true);
 			return false;
 		}
-		Log.i(TAG, "calling function to change connection state");
-		_callback_interface.postProcess(true);
 		return true;
 	}
 	
@@ -261,6 +290,8 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 			e.printStackTrace();
 		}
 		_callback_interface.postProcess("PDV Started listening..");
+		Log.i(TAG, "calling function to change connection state");
+		_callback_interface.postProcess(true);
 	}
 	
 	public void setupStreams()
@@ -276,13 +307,15 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 		for(PDCReceiver pdc_receiver : ds.getReceivers())
 		{
 			try {
-				ds.setupReceiver(pdc_receiver, _rec_auth, hashedIMEI);
+				if(ds.setupReceiver(pdc_receiver, _rec_auth, hashedIMEI))
+					Log.d(TAG, "Could setup properly");
+				else
+					Log.d(TAG,"Could not setup");
 			} catch (PDCTransmissionException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}
-		
+		/*
 		ds = _ohmage_application.getDataStream(
 				_survey_response_stream + usernamehash);
 		for(PDCReceiver pdc_receiver : ds.getReceivers())
@@ -290,10 +323,13 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 			try {
 				ds.setupReceiver(pdc_receiver, _rec_auth, hashedIMEI);
 			} catch (PDCTransmissionException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-		}
+		}*/
+	}
+	
+	public static String getHashedDeviceId() {
+		return hashingFunction(DEVICE_ID);
 	}
 	
 	private static String hashingFunction(String username)
@@ -375,7 +411,7 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 	
 	// Accessors 
 	
-	public boolean isListening() {
+	public static boolean isListening() {
 		return _listening;
 	}
 	
@@ -383,10 +419,13 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 		_callback_interface.postProcess(str);
 	}
 	
+	public static String getAppInstance() {
+		return app_instance;
+	}
+	
 
 	@Override
 	public void newCCNxStatus(SERVICE_STATUS st) {
-		// TODO Auto-generated method stub
 		switch (st) {
 		case CCND_INITIALIZING:
 			_callback_interface.postProcess("Initializing CCNd ...");
@@ -424,7 +463,7 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 	
 	private CCNxServiceControl _ccnx_service;
 	
-	private boolean _listening = false;
+	private static boolean _listening = false;
 
 	private String _namespace;
 
@@ -444,7 +483,7 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 
 	private DataStream _stream;
 
-	private static OhmagePDVManager _ohmage_NDN_manager;
+	private static OhmagePDVManager _ohmage_PDV_manager;
 	
 	private static OhmagePDVManagerCallback _callback_interface;
 	
@@ -452,6 +491,12 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 	
 	private TelephonyManager telephonyManager = null;
 	
-	private String DEVICE_ID = null;
-
+	private static String DEVICE_ID = null;
+	
+	private static final String app_instance = "androidclient";
+	
+	private static PublisherPublicKeyDigest _configuration_digest = null;
+	
+	private ContentName _config_keyname = null;
+	
 }

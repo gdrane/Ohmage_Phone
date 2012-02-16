@@ -47,12 +47,22 @@ import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpConnectionParams;
 import org.apache.http.params.HttpParams;
 import org.apache.http.util.EntityUtils;
+import org.ccnx.ccn.config.SystemConfiguration;
+import org.ccnx.ccn.protocol.ContentName;
+import org.ccnx.ccn.protocol.ContentObject;
+import org.ccnx.ccn.protocol.KeyLocator;
+import org.ccnx.ccn.protocol.MalformedContentNameStringException;
+import org.ccnx.ccn.protocol.PublisherPublicKeyDigest;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import android.content.Context;
+import edu.ucla.cens.pdc.libpdc.core.GlobalConfig;
+import edu.ucla.cens.pdc.libpdc.core.PDCKeyManager;
 import edu.ucla.cens.systemlog.Log;
+import org.ohmage.pdc.OhmagePDVManager;
+import org.ohmage.util.NDNUtils;
 
 public class OhmageApi {
 	private static final String TAG = "OhmageApi";
@@ -412,49 +422,134 @@ public class OhmageApi {
 		final boolean GZIP = false;
 		
 		String url = serverUrl + CAMPAIGN_READ_PATH;
-		
-		try {
-			List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
-	        nameValuePairs.add(new BasicNameValuePair("user", username));
-	        nameValuePairs.add(new BasicNameValuePair("password", hashedPassword));
-	        nameValuePairs.add(new BasicNameValuePair("client", client));
-	        nameValuePairs.add(new BasicNameValuePair("output_format", outputFormat));
-	        if (campaignUrnList != null) {
-	        	nameValuePairs.add(new BasicNameValuePair("campaign_urn_list", campaignUrnList));
-	        }
-	        UrlEncodedFormEntity formEntity = new UrlEncodedFormEntity(nameValuePairs);
-			
-			return (CampaignReadResponse)parseReadResponse(doHttpPost(url, formEntity, GZIP), CampaignReadResponse.class);
-		} catch (IOException e) {
-			Log.e(TAG, "IOException while creating http entity", e);
-			CampaignReadResponse candidate = new CampaignReadResponse();
-			candidate.setResponseStatus(Result.INTERNAL_ERROR, null);
-			return candidate;
+		if(client == "android") {
+			if(!OhmagePDVManager.isListening())
+				return null;
+			GlobalConfig config = GlobalConfig.getInstance();
+			PublisherPublicKeyDigest digest = OhmagePDVManager.getConfigurationDigest();
+			ContentName keyName = OhmagePDVManager.getInstance().
+					getConfigKeyLocator();
+			KeyLocator locator = new KeyLocator(keyName, digest);
+			byte[] encrypted_data = NDNUtils.encryptConfigData(locator, username+ "," + hashedPassword);
+			try {
+				ContentName campaignReadName = config.getRoot().
+						append(OhmagePDVManager.getAppInstance()).
+						append(OhmagePDVManager.getHashedDeviceId()).
+						append("manage/campaign/read").append(outputFormat).
+						append(new String(encrypted_data));
+				
+				ContentObject co = config.getCCNHandle().get(campaignReadName, 
+						SystemConfiguration.LONG_TIMEOUT);
+				byte[] data = NDNUtils.decryptConfigData(co.content());
+				try {
+					JSONObject jsonObj = 
+							new JSONObject(new String(data));
+					CampaignReadResponse response = new CampaignReadResponse();
+					response.populateFromJSON(jsonObj);
+					return response;
+				} catch (JSONException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				
+				
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			catch (MalformedContentNameStringException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+					
+		} else {
+			try {
+				List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
+		        nameValuePairs.add(new BasicNameValuePair("user", username));
+		        nameValuePairs.add(new BasicNameValuePair("password", hashedPassword));
+		        nameValuePairs.add(new BasicNameValuePair("client", client));
+		        nameValuePairs.add(new BasicNameValuePair("output_format", outputFormat));
+		        if (campaignUrnList != null) {
+		        	nameValuePairs.add(new BasicNameValuePair("campaign_urn_list", campaignUrnList));
+		        }
+		        UrlEncodedFormEntity formEntity = new UrlEncodedFormEntity(nameValuePairs);
+				
+				return (CampaignReadResponse)parseReadResponse(doHttpPost(url, formEntity, GZIP), CampaignReadResponse.class);
+			} catch (IOException e) {
+				Log.e(TAG, "IOException while creating http entity", e);
+				CampaignReadResponse candidate = new CampaignReadResponse();
+				candidate.setResponseStatus(Result.INTERNAL_ERROR, null);
+				return candidate;
+			}
 		}
+		
+		return null;
 	}
 	
 	public CampaignXmlResponse campaignXmlRead(String serverUrl, String username, String hashedPassword, String client, String campaignUrn) {
 		
 		final boolean GZIP = false;
-		
+
 		String url = serverUrl + CAMPAIGN_READ_PATH;
 		
-		try {
-			List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
-	        nameValuePairs.add(new BasicNameValuePair("user", username));
-	        nameValuePairs.add(new BasicNameValuePair("password", hashedPassword));
-	        nameValuePairs.add(new BasicNameValuePair("client", client));
-	        nameValuePairs.add(new BasicNameValuePair("output_format", "xml"));
-	        nameValuePairs.add(new BasicNameValuePair("campaign_urn_list", campaignUrn));
-	        UrlEncodedFormEntity formEntity = new UrlEncodedFormEntity(nameValuePairs);
+		if(client.equals("android")) {
+			GlobalConfig config = GlobalConfig.getInstance();
+			PublisherPublicKeyDigest digest = OhmagePDVManager.getConfigurationDigest();
+			ContentName keyName = OhmagePDVManager.getInstance().
+					getConfigKeyLocator();
+			KeyLocator locator = new KeyLocator(keyName, digest);
+			byte[] encrypted_data = 
+					NDNUtils.encryptConfigData(locator, 
+							username+ "," + hashedPassword);
+			try {
+				ContentName campaignXMLReadName = config.getRoot().
+						append(OhmagePDVManager.getAppInstance()).
+						append(OhmagePDVManager.getHashedDeviceId()).
+						append("manage/campaign/read").append("xml").
+						append(campaignUrn).append(new String(encrypted_data));
+				ContentObject co = config.getCCNHandle().get(campaignXMLReadName, 
+						SystemConfiguration.LONG_TIMEOUT);
+				byte[] data = NDNUtils.decryptConfigData(co.content());
+				JSONObject returnedObject = new JSONObject(new String(data));
+				String xml = returnedObject.getString("xml_result");
+				// String campaignName = returnedObject.getString("campaign_name");
+				CampaignXmlResponse candidate = new CampaignXmlResponse();
+				candidate.setXml(xml);
+				return candidate;
+				
+			} catch (MalformedContentNameStringException e) {
+				Log.e(TAG, "MalformedContentNameStringException while creating http entity", e);
+				CampaignXmlResponse candidate = new CampaignXmlResponse();
+				candidate.setResponseStatus(Result.INTERNAL_ERROR, null);
+				return candidate;
+			} catch (IOException e) {
+				Log.e(TAG, "IOException while creating http entity", e);
+				CampaignXmlResponse candidate = new CampaignXmlResponse();
+				candidate.setResponseStatus(Result.INTERNAL_ERROR, null);
+				return candidate;
+			} catch (JSONException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		} else {	
+			try {
+				List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
+	        	nameValuePairs.add(new BasicNameValuePair("user", username));
+	        	nameValuePairs.add(new BasicNameValuePair("password", hashedPassword));
+	        	nameValuePairs.add(new BasicNameValuePair("client", client));
+	        	nameValuePairs.add(new BasicNameValuePair("output_format", "xml"));
+	        	nameValuePairs.add(new BasicNameValuePair("campaign_urn_list", campaignUrn));
+	        	UrlEncodedFormEntity formEntity = new UrlEncodedFormEntity(nameValuePairs);
 			
-			return (CampaignXmlResponse)parseXmlResponse(doHttpPost(url, formEntity, GZIP));
-		} catch (IOException e) {
-			Log.e(TAG, "IOException while creating http entity", e);
-			CampaignXmlResponse candidate = new CampaignXmlResponse();
-			candidate.setResponseStatus(Result.INTERNAL_ERROR, null);
-			return candidate;
+				return (CampaignXmlResponse)parseXmlResponse(doHttpPost(url, formEntity, GZIP));
+			} catch (IOException e) {
+				Log.e(TAG, "IOException while creating http entity", e);
+				CampaignXmlResponse candidate = new CampaignXmlResponse();
+				candidate.setResponseStatus(Result.INTERNAL_ERROR, null);
+				return candidate;
+			}
 		}
+		return null;
 	}
 	
 	private CampaignXmlResponse parseXmlResponse(HttpResponse response) {

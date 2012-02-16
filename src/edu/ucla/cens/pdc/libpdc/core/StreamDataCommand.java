@@ -32,7 +32,7 @@ public class StreamDataCommand extends StreamCommand {
 		if (postfix.count() != 1)
 			return false;
 
-		record_id = postfix.stringComponent(0);
+		record_id = postfix.stringComponent(3);
 
 		Log.debug(String.format(
 				"Requested; app = %s, datastream = %s, record_id = %s",

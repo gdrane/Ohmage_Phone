@@ -1,12 +1,10 @@
 package org.ohmage.activity;
 
 import android.app.Activity;
-import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
-import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -50,31 +48,30 @@ public final class NDNActivity extends Activity implements
 		_tv_status = (TextView) findViewById(R.id.tvStatus);
 		if (_tv_status == null)
 			throw new Error("Could not find tvStatus");
+		
+		_connect_remote_button = (Button) findViewById(R.id.Connect);
+		if(_connect_remote_button == null)
+			throw new Error("Could not find Remote Button");
 
 		_setup_stream_button.setOnClickListener(this);
 		_start_pdv_button.setOnClickListener(this);
 		_request_pull_button.setOnClickListener(this);
+		_connect_remote_button.setOnClickListener(this);
 
 		_etRecURL = (EditText) findViewById(R.id.etRecURL);
 		_etRecAuth = (EditText) findViewById(R.id.etAuth);
+		_etRemoteHost = (EditText) findViewById(R.id.etRemoteIP);
+		_etRemotePort = (EditText) findViewById(R.id.etRemotePort);
 
 		restorePreferences();
 
 		enableView(false);
-		if(getApplication() == null)
-			Log.i("TIMEPASS", "NULLLLLL");
 
 		_ohmage_PDV_manager = OhmagePDVManager.createNewInstance(
 				(OhmageApplication)getApplication(), this);
 		
-		telephonyManager = (TelephonyManager)getSystemService(
-				Context.TELEPHONY_SERVICE);
-		
-		DEVICE_ID = telephonyManager.getDeviceId();
-		
 		OHMAGE_PHONE_NAMESPACE = "/ndn/ucla.edu/apps/" +
-		OhmagePDVManager.getUsername() 
-				+ "/androidclient";
+		OhmagePDVManager.getUsername();
 		
 		_ohmage_PDV_manager.InitializeCCNx(getApplicationContext());
 		
@@ -119,25 +116,50 @@ public final class NDNActivity extends Activity implements
 
 		switch (v.getId()) {
 		
+		case R.id.Connect:
+						if(_etRemoteHost.getText().toString().equals("") ||
+							_etRemotePort.getText().toString().equals(""))
+						{
+						postProcess("You have not entered remote host ip or port", 
+						false);
+						}
+						_ohmage_PDV_manager.setRemotehost(
+								_etRemoteHost.getText().toString());
+						_ohmage_PDV_manager.
+							setRemoteport(Integer.parseInt(_etRemotePort.
+											getText().toString()));
+						_ohmage_PDV_manager.startCCNx();
+						break;
+		
 		case R.id.StartPDV:
 							_ohmage_PDV_manager.setNamespace(
 									OHMAGE_PHONE_NAMESPACE);
+							if(_etRemoteHost.getText().toString().equals("") ||
+									_etRemotePort.getText().toString().equals(""))
+							{
+								postProcess("You have not entered remote host ip or port", 
+										false);
+							}
+								
 							_ohmage_PDV_manager.setRemotehost(
-									DEFAULT_REMOTEHOST);
+									_etRemoteHost.getText().toString());
 							_ohmage_PDV_manager.
-								setRemoteport(
-										Integer.parseInt(DEFAULT_REMOTEPORT));
+								setRemoteport(Integer.parseInt(_etRemotePort.
+												getText().toString()));
 							_ohmage_PDV_manager.setRecUrl(
 									_etRecURL.getText().toString());
 							if(_ohmage_PDV_manager.startCCNx()) {
 								_ohmage_PDV_manager.create();
 								_ohmage_PDV_manager.startListening();
+							} else {
+								postProcess("Could not start CCNX this time try again later", 
+										false);
 							}
+							startPDVDone = true;
 							//enableView(true);
 							break;
 		case R.id.SetupStream:
-							_ohmage_PDV_manager.setRecAuth(
-									_etRecAuth.getText().toString());
+							_ohmage_PDV_manager.setRecAuth("test_authenticator");
 							_ohmage_PDV_manager.setupStreams();
 							break;
 		
@@ -205,6 +227,8 @@ public final class NDNActivity extends Activity implements
 			_etRecURL.setEnabled(true);
 			_etRecAuth.setEnabled(false);
 			_request_pull_button.setEnabled(false);
+			_etRemoteHost.setEnabled(true);
+			_etRemotePort.setEnabled(true);
 			break;
 		case STARTED:
 			// _etNamespace.setEnabled(false);
@@ -215,6 +239,8 @@ public final class NDNActivity extends Activity implements
 			_etRecURL.setEnabled(false);
 			_etRecAuth.setEnabled(true);
 			_request_pull_button.setEnabled(true);
+			_etRemoteHost.setEnabled(true);
+			_etRemotePort.setEnabled(true);
 		}
 	}
 
@@ -223,9 +249,17 @@ public final class NDNActivity extends Activity implements
 		final SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
 		final String recURL = settings.getString(PREF_REC_URL, DEFAULT_REC_URL);
 		final String recAuth = settings.getString(PREF_REC_AUTH,
-		 DEFAULT_REC_AUTH);		
-		 _etRecURL.setText(recURL);
+		 DEFAULT_REC_AUTH);
+		final String recRemHostIP = settings.getString(PREF_REC_REMHOSTIP, "");
+		final String recRemHostPort = settings.getString(PREF_REC_REMHOSTPORT, "");
+		startPDVDone = settings.getBoolean(PREF_REC_STARTPDVDONE, false);
+		
+		_etRecURL.setText(recURL);
 		_etRecAuth.setText(recAuth);
+		_etRemoteHost.setText(recRemHostIP);
+		_etRemotePort.setText(recRemHostPort);
+		if(startPDVDone)
+			postProcess(true);
 	}
 
 	private void savePreferences()
@@ -236,8 +270,11 @@ public final class NDNActivity extends Activity implements
 		// editor.putString(PREF_NAMESPACE, _etNamespace.getText().toString());
 		// editor.putString(PREF_REMOTEHOST, _etRemoteHost.getText().toString());
 		// editor.putString(PREF_REMOTEPORT, _etRemotePort.getText().toString());
-		// editor.putString(PREF_REC_URL, _etRecURL.getText().toString());
+		editor.putString(PREF_REC_URL, _etRecURL.getText().toString());
 		editor.putString(PREF_REC_AUTH, _etRecAuth.getText().toString());
+		editor.putString(PREF_REC_REMHOSTIP, _etRemoteHost.getText().toString());
+		editor.putString(PREF_REC_REMHOSTPORT, _etRemotePort.getText().toString());
+		editor.putBoolean(PREF_REC_STARTPDVDONE, startPDVDone);
 		editor.commit();
 	}
 
@@ -309,17 +346,13 @@ public final class NDNActivity extends Activity implements
 	private OhmagePDVManager _ohmage_PDV_manager;
 
 	private static final String PREFS_NAME = "ccnChatPrefs";
-	
-	private TelephonyManager telephonyManager = null;
-	
-	private String DEVICE_ID = null;
 
 	private static String OHMAGE_PHONE_NAMESPACE = null;
 
 	private static final String DEFAULT_REC_URL = 
-			"ccnx:/ucla.edu/apps/server_pdv";
+			"ccnx:/ndn/ucla.edu/apps/borges/ohmagepdv";
 
-	private static final String DEFAULT_REMOTEHOST = "192.168.1.4";
+	private static final String DEFAULT_REMOTEHOST = "131.179.210.125";
 
 	private static final String DEFAULT_REMOTEPORT = "9695";
 
@@ -333,14 +366,20 @@ public final class NDNActivity extends Activity implements
 
 	protected static final String PREF_REMOTEPORT = "remoteport";
 
-	protected static final String PREF_REC_AUTH = "recAuth";
+	protected static final String PREF_REC_AUTH = "recAuth";	
 	
-	private static boolean ccnxConfigured = false;
+	protected static final String PREF_REC_STARTPDVDONE = "startPDVDone";
+	
+	protected static final String PREF_REC_REMHOSTIP = "remoteHostIP";
+	
+	protected static final String PREF_REC_REMHOSTPORT = "remoteHostPort";
 
-	private Button _setup_stream_button, _request_pull_button, _start_pdv_button;
+	private Button _setup_stream_button, _request_pull_button, _start_pdv_button,
+	_connect_remote_button;
 
 	private TextView _tv_status;
 
-	private EditText _etRemoteHost, _etRemotePort, _etRecURL,
-			_etRecAuth;
+	private EditText _etRecURL, _etRecAuth, _etRemoteHost, _etRemotePort;
+	
+	private boolean startPDVDone = false;
 }

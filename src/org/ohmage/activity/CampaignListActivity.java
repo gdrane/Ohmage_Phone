@@ -68,6 +68,8 @@ public class CampaignListActivity extends BaseSingleFragmentActivity implements 
 
 			@Override
 			protected void onPostExecute(CampaignReadResponse response) {
+				if(response == null)
+					return;
 				super.onPostExecute(response);
 				getActionBar().setProgressVisible(false);
 			}

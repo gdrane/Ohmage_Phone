@@ -29,6 +29,7 @@ public class StreamInfo implements iBSONExportable {
 		_data = new BasicDBObject();
 
 		_data.put("enc_key", stream.getTransport().getEncryptor().getEncryptKey());
+
 	}
 
 	public byte[] getStreamKey()
@@ -63,6 +64,7 @@ public class StreamInfo implements iBSONExportable {
 
 		return this;
 	}
+	
 
 	@Override
 	public String toString()

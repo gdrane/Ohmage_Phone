@@ -49,7 +49,8 @@ class CampaignReadTask extends ManagedAsyncTask<String, Void, CampaignReadRespon
 		String hashedPassword = params[1];
 		OhmageApi api = new OhmageApi(mContext);
 		CampaignReadResponse response = api.campaignRead(SharedPreferencesHelper.DEFAULT_SERVER_URL, username, hashedPassword, "android", "short", null);
-		
+		if(response == null)
+			return response;
 		if (response.getResult() == Result.SUCCESS) {
 			ContentResolver cr = mContext.getContentResolver();
 			
@@ -141,6 +142,8 @@ class CampaignReadTask extends ManagedAsyncTask<String, Void, CampaignReadRespon
 	
 	@Override
 	protected void onPostExecute(CampaignReadResponse response) {
+		if(response == null)
+			return;
 		super.onPostExecute(response);	
 		
 		if (response.getResult() == Result.SUCCESS) {

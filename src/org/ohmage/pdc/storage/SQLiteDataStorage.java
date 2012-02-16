@@ -104,6 +104,8 @@ public class SQLiteDataStorage extends Storage {
 		if(tablename == "MOBILITY_DATA_STREAM")
 		{
 			
+			
+			
 		} else if(tablename == "SURVEY_DATA_STREAM")
 		{
 			if(start != null && end != null)
@@ -111,14 +113,13 @@ public class SQLiteDataStorage extends Storage {
 				if(Integer.parseInt(start) > Integer.parseInt(end))
 					return null;
 			}
-			SharedPreferencesHelper helper = new SharedPreferencesHelper(_app);
 			Uri dataUri = Responses.CONTENT_URI;
 			
 			ContentResolver cr = _app.getContentResolver();
 			
 			String [] projection = new String [] {
-											Tables.RESPONSES + "." + 
-			Responses._ID,
+							Tables.RESPONSES + "." + 
+										Responses._ID,
 											};
 			
 			String select =  Responses.RESPONSE_STATUS + "!=" + 
@@ -136,8 +137,7 @@ public class SQLiteDataStorage extends Storage {
 			cv.put(Responses.RESPONSE_STATUS, Response.STATUS_QUEUED);
 			cr.update(dataUri, cv, select, null);
 			List<String> responseIds= new ArrayList<String>();
-			for (int i = 0; i < cursor.getCount(); i++) {
-				
+			for (int i = 0; i < cursor.getCount(); i++) {		
 				long responseId = cursor.getLong(cursor.getColumnIndex(
 						Responses._ID));
 				while((start != null) && (Integer.parseInt(start) < responseId))

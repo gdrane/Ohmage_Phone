@@ -21,7 +21,7 @@ import edu.ucla.cens.pdc.libpdc.stream.DataEncryptor;
 import edu.ucla.cens.pdc.libpdc.transport.CommunicationHelper;
 import edu.ucla.cens.pdc.libpdc.transport.PDCPublisher;
 import edu.ucla.cens.pdc.libpdc.transport.PDCReceiver;
-import edu.ucla.cens.pdc.libpdc.util.Log;
+import android.util.Log;
 import java.security.GeneralSecurityException;
 import java.security.PublicKey;
 import java.util.Arrays;
@@ -34,7 +34,6 @@ import org.ccnx.ccn.protocol.ContentObject;
 import org.ccnx.ccn.protocol.KeyLocator;
 import org.ccnx.ccn.protocol.PublisherID;
 import org.ccnx.ccn.protocol.PublisherPublicKeyDigest;
-
 /**
  *
  * @author Derek Kulinski
@@ -54,7 +53,7 @@ public class StreamControlCommands extends StreamCommand {
 		ContentObject co;
 
 		if (publisher == null) {
-			Log.warning("Got setup request, while a publisher wasn't set up");
+			Log.w(TAG, "Got setup request, while a publisher wasn't set up");
 			return false;
 		}
 		try {
@@ -65,22 +64,22 @@ public class StreamControlCommands extends StreamCommand {
 					"Error while trying to respond to the request with an ACK", ex);
 		}
 
-		Log.info("### REQUESTING AUTHENTICATOR ### (Step 6)");
+		Log.v(TAG, "### REQUESTING AUTHENTICATOR ### (Step 6)");
 
 		try {
 			name = publisher.uri.append(ds.app.getAppName()).append(ds.data_stream_id).
 					append(Constants.STR_CONTROL).append("authenticator").append(config.
 					getRoot());
 
-			co = config.getCCNHandle().get(name, SystemConfiguration.LONG_TIMEOUT);
+			co = config.getCCNHandle().get(name, SystemConfiguration.MAX_TIMEOUT);
 			if (co == null) {
-				Log.error("Got no response when requesting authenticator");
+				Log.e(TAG, "Got no response when requesting authenticator");
 				return false;
 			}
 
 			//Verify if data is in check
 			if (!co.verify(config.getKeyManager())) {
-				Log.error("Authenticator content fails data verification");
+				Log.e(TAG, "Authenticator content fails data verification");
 				return false;
 			}
 
@@ -89,37 +88,65 @@ public class StreamControlCommands extends StreamCommand {
 			final Authenticator auth = new Authenticator().fromBSON(data);
 
 			if (!Arrays.equals(auth.getKeyDigest(), co.signedInfo().getPublisher())) {
-				Log.error(
+				Log.e(TAG, 
 						"Tempering detected! Data is signed with different key than one stored in authenticator");
 				return false;
 			}
 
 			if (!auth.getAuthenticator().equals(publisher.getAuthenticator())) {
-				Log.error("Authenticator value doesn't match");
+				Log.e(TAG, "Authenticator value doesn't match");
 				return false;
 			}
 
-			Log.info("### AUTHENTICATOR RECEIVED IS CORRECT ### (Step 6)");
+			Log.i(TAG, "### AUTHENTICATOR RECEIVED IS CORRECT ### (Step 6)");
 
-			Log.info("Adding key " + DataUtils.base64Encode(auth.getKeyDigest(),
+			Log.i(TAG, "Adding key " + DataUtils.base64Encode(auth.getKeyDigest(),
 					PublisherID.PUBLISHER_ID_LEN * 2) + " to trusted keys.");
 			config.getKeyManager().authenticateKey(auth.getKeyDigest());
+			
+			Log.i(TAG, "### ASKING FOR STREAM INFORMATION ### (Step 7)");
+			
+			name = publisher.uri.append(ds.data_stream_id).append(Constants.STR_CONTROL).
+					append("stream_info").append(config.getRoot());
+
+			co = config.getCCNHandle().get(name, 
+					SystemConfiguration.LONG_TIMEOUT);
+			if (co == null) {
+				Log.e(TAG, "Got no response when requesting authenticator");
+				return false;
+			}
+			Log.i(TAG, "Received Content Object is : " + co);
+			//Verify if data is in check
+			if (!co.verify(config.getKeyManager())) {
+				Log.e(TAG, "Authenticator content fails data verification");
+				return false;
+			}
+
+			final byte[] stream_data = ds.getTransport().getEncryptor().
+					decryptAsymData(co.content());
+			
+			ds.getTransport().getEncryptor().setDecryptKey(stream_data);
+			ds.getTransport().getEncryptor().setEncryptKey(stream_data);
+			
+			StreamInfo si = new StreamInfo(ds);
+			ds.updateStreamSetupStatus(si);
+			
 
 			return true;
 		}
 		catch (GeneralSecurityException ex) {
-			Log.error("Problem while trying to verify data signature: " + ex.
+			Log.e(TAG, "Problem while trying to verify data signature: " + ex.
 					getLocalizedMessage());
 		}
 		catch (IOException ex) {
-			Log.error("Communication problem: " + ex.getLocalizedMessage());
+			Log.e(TAG, "Communication problem: " + ex.getLocalizedMessage());
 		}
 		catch (PDCParseException ex) {
-			Log.error("Unable to parse data (malformaed string?): " + ex.
+			Log.e(TAG, "Unable to parse data (malformaed string?): " + ex.
 					getLocalizedMessage());
 		}
 		catch (PDCEncryptionException ex) {
-			Log.error("Unable to decrypt message: " + ex.getLocalizedMessage());
+			Log.e(TAG, "Unable to decrypt message: " + ex.getLocalizedMessage());
 		}
 		catch (MalformedContentNameStringException ex) {
 			throw new Error("Unable to form CCN name", ex);
@@ -128,28 +155,29 @@ public class StreamControlCommands extends StreamCommand {
 		return false;
 	}
 
-	boolean processAuthenticator(DataStream ds, ContentName receiver_uri,
+	boolean processAuthenticator(DataStream ds, ContentName remainder,
 			Interest interest)
 	{
 		final GlobalConfig config = GlobalConfig.getInstance();
 		PDCReceiver receiver;
 		Authenticator auth;
 		byte[] encrypted;
-
+		ContentName receiver_uri = remainder.subname(4, remainder.count() - 4);
+		Log.i(TAG, "Receiver URI extracted from the interest : " + receiver_uri);
 		receiver = ds.name2receiver(receiver_uri);
 		if (receiver == null) {
-			Log.info("Interest for authenticator for unknown " + receiver_uri.
+			Log.i(TAG, "Interest for authenticator for unknown " + receiver_uri.
 					toURIString());
 			return false;
 		}
 
-		Log.info("### RESPONDING TO AUTHENTICATOR REQUEST ### (Step 6)");
+		Log.i(TAG, "### RESPONDING TO AUTHENTICATOR REQUEST ### (Step 6)");
 
 		try {
 			auth = new Authenticator(ds, receiver);
 		}
 		catch (PDCException ex) {
-			Log.info("No authenticator available: " + ex.getMessage());
+			Log.i(TAG, "No authenticator available: " + ex.getMessage());
 			return false;
 		}
 		try {
@@ -157,45 +185,47 @@ public class StreamControlCommands extends StreamCommand {
 			encrypted = encryptor.encryptAsymData(receiver, auth);
 		}
 		catch (PDCEncryptionException ex) {
-			Log.error("Error while encrypting data: " + ex.getMessage());
+			Log.e(TAG, "Error while encrypting data: " + ex.getMessage());
 			return false;
 		}
 
 		try {
+			Log.v(TAG, "Sending authenticator, publisher digest : " + ds.getTransport().getEncryptor().getStreamKeyDigest());
 			return CommunicationHelper.publishEncryptedData(config.getCCNHandle(),
 					interest, ds.getTransport().getEncryptor().getStreamKeyDigest(),
 					encrypted, 1);
 		}
 		catch (PDCTransmissionException ex) {
-			Log.error("Error while transmitting data: " + ex.getMessage());
+			Log.e(TAG, "Error while transmitting data: " + ex.getMessage());
 			return false;
 		}
 	}
 
-	boolean processStreamInfo(DataStream ds, ContentName receiver_uri,
+	boolean processStreamInfo(DataStream ds, ContentName remainder,
 			Interest interest)
 	{
 		final GlobalConfig config = GlobalConfig.getInstance();
 		PDCReceiver receiver;
 		StreamInfo si;
 		byte[] encrypted;
-
+		ContentName receiver_uri = remainder.subname(4, remainder.count() - 4);
 		receiver = ds.name2receiver(receiver_uri);
 		if (receiver == null) {
-			Log.warning(receiver_uri.toURIString() + " is an unknown URI");
+			Log.w(TAG, receiver_uri.toURIString() + " is an unknown URI");
 			return false;
 		}
 
 		si = new StreamInfo(ds);
+		ds.updateStreamSetupStatus(si);
 		try {
 			encrypted = ds.getTransport().getEncryptor().encryptAsymData(receiver, si);
 		}
 		catch (PDCEncryptionException ex) {
-			Log.error("Unable to encrypt stream info: " + ex.getMessage());
+			Log.e(TAG, "Unable to encrypt stream info: " + ex.getMessage());
 			return false;
 		}
 
-		Log.info("### SENDING STREAMINFO ### (Step 7)");
+		Log.i(TAG, "### SENDING STREAMINFO ### (Step 7)");
 
 		assert encrypted != null;
 
@@ -205,7 +235,7 @@ public class StreamControlCommands extends StreamCommand {
 					encrypted, 1);
 		}
 		catch (PDCTransmissionException ex) {
-			Log.error("Unable to transmit data: " + ex.getMessage());
+			Log.e(TAG, "Unable to transmit data: " + ex.getMessage());
 			return false;
 		}
 	}
@@ -222,7 +252,7 @@ public class StreamControlCommands extends StreamCommand {
 		assert key != null;
 		assert version != null;
 
-		Log.info("### GOT KEY REQUEST; SENDING MY KEY ### (" + digest + ")");
+		Log.i(TAG, "### GOT KEY REQUEST; SENDING MY KEY ### (" + digest + ")");
 
 		final KeyLocator locator = new KeyLocator(interest.name(), digest);
 
@@ -236,7 +266,7 @@ public class StreamControlCommands extends StreamCommand {
 			return true;
 		}
 		catch (IOException ex) {
-			Log.error("Unable to send the key: " + ex.getLocalizedMessage());
+			Log.e(TAG, "Unable to send the key: " + ex.getLocalizedMessage());
 		}
 
 		return false;
@@ -261,10 +291,10 @@ public class StreamControlCommands extends StreamCommand {
 					interest, publisher, last.getBytes(), 1);
 		}
 		catch (PDCTransmissionException ex) {
-			Log.error("Unable to send data: " + ex.getLocalizedMessage());
+			Log.e(TAG, "Unable to send data: " + ex.getLocalizedMessage());
 		}
 		catch (PDCDatabaseException ex) {
-			Log.error("Unable to access the data: " + ex.getLocalizedMessage());
+			Log.e(TAG, "Unable to access the data: " + ex.getLocalizedMessage());
 		}
 		return false;
 	}
@@ -272,35 +302,34 @@ public class StreamControlCommands extends StreamCommand {
 	@Override
 	boolean processCommand(DataStream ds, ContentName postfix, Interest interest)
 	{
-		Log.debug("Got stream interest for: " + postfix.toString());
+		Log.d(TAG, "Got stream interest for: " + postfix.toString());
 
 		if (postfix.count() == 0) {
-			Log.error("No subcommand!");
+			Log.e(TAG, "No subcommand!");
 
 			return false;
 		}
 
-		String command = postfix.stringComponent(0);
+		String command = postfix.stringComponent(3);
 
 		try {
-			ContentName remainder = postfix.subname(1, postfix.count() - 1);
 
 			if (command.equals("setup"))
 				return processSetup(ds, interest);
 			else if (command.equals("authenticator"))
-				return processAuthenticator(ds, remainder, interest);
+				return processAuthenticator(ds, postfix, interest);
 			else if (command.equals("stream_info"))
-				return processStreamInfo(ds, remainder, interest);
+				return processStreamInfo(ds, postfix, interest);
 			else if (command.equals("key"))
-				return processKey(ds, remainder, interest);
+				return processKey(ds, postfix, interest);
 			else if (command.equals("pull"))
 				return ds.getTransport().pullInterestHandler(interest);
 			else if (command.equals("list"))
-				return ds.getTransport().publishRecordList(interest, remainder);
+				return ds.getTransport().publishRecordList(interest, postfix);
 			else if (command.equals("last"))
 				return processLast(ds, interest);
 			else {
-				Log.info("Invalid request: " + interest.name().toURIString());
+				Log.i(TAG, "Invalid request: " + interest.name().toURIString());
 
 				return false;
 			}
@@ -309,4 +338,6 @@ public class StreamControlCommands extends StreamCommand {
 			throw new Error("Got problem", ex);
 		}
 	}
+	
+	private final static String TAG = "StreamControlCommandClass";
 }

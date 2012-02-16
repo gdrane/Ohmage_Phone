@@ -256,10 +256,24 @@ public class UploadService extends WakefulIntentService {
 		DataStream ds = app.getDataStream(stream_id);
 		ds.requestPull();
 		*/
-		OhmageApplication app = (OhmageApplication)getApplication();
-		String stream_id = OhmagePDVManager._survey_response_stream + 
-				OhmagePDVManager.getHashedUsername();
-		DataStream ds = app.getDataStream(stream_id);
-		ds.requestPull();
+		if(OhmagePDVManager.getInstance().isListening()) {
+			OhmageApplication app = (OhmageApplication)getApplication();
+			String stream_id = OhmagePDVManager._survey_response_stream + 
+					OhmagePDVManager.getHashedUsername();
+			if(app == null)
+				return;
+			DataStream ds = app.getDataStream(stream_id);
+			if(ds != null) {
+				
+			if(ds.isSetup())
+				ds.requestPull();
+			}
+			stream_id = OhmagePDVManager._mobility_data_stream + 
+					OhmagePDVManager.getHashedUsername();
+			ds = app.getDataStream(stream_id);
+			if(ds !=null && ds.isSetup())
+				ds.requestPull();
+		}
+	
 	}
 }

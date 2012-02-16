@@ -16,7 +16,7 @@ import edu.ucla.cens.pdc.libpdc.iApplication;
 import edu.ucla.cens.pdc.libpdc.iBSONExportable;
 import edu.ucla.cens.pdc.libpdc.transport.PDCNode;
 import edu.ucla.cens.pdc.libpdc.util.EncryptionHelper;
-import edu.ucla.cens.pdc.libpdc.util.Log;
+import android.util.Log;
 import edu.ucla.cens.pdc.libpdc.util.StringUtil;
 import java.io.IOException;
 import java.security.PrivateKey;
@@ -24,12 +24,12 @@ import java.security.PublicKey;
 import java.util.LinkedList;
 import java.util.List;
 import javax.crypto.SecretKey;
-import org.bouncycastle.crypto.BlockCipher;
-import org.bouncycastle.crypto.BufferedBlockCipher;
-import org.bouncycastle.crypto.engines.TwofishEngine;
-import org.bouncycastle.crypto.modes.CBCBlockCipher;
-import org.bouncycastle.crypto.paddings.PaddedBufferedBlockCipher;
-import org.bouncycastle.crypto.params.KeyParameter;
+import org.spongycastle.crypto.BlockCipher;
+import org.spongycastle.crypto.BufferedBlockCipher;
+import org.spongycastle.crypto.engines.TwofishEngine;
+import org.spongycastle.crypto.modes.CBCBlockCipher;
+import org.spongycastle.crypto.paddings.PaddedBufferedBlockCipher;
+import org.spongycastle.crypto.params.KeyParameter;
 import org.ccnx.ccn.KeyManager;
 import org.ccnx.ccn.protocol.KeyLocator;
 import org.ccnx.ccn.protocol.PublisherPublicKeyDigest;
@@ -147,7 +147,7 @@ public class DataEncryptor {
 		int output_len;
 
 		if (_encrypt_key == null) {
-			Log.info("No symmetric key set previously, generating a new one");
+			Log.i(TAG, "No symmetric key set previously, generating a new one");
 			generateNewKey();
 		}
 
@@ -240,10 +240,10 @@ public class DataEncryptor {
 		locator = _stream.getKeyLocator(node);
 		assert locator != null;
 
-		Log.debug("Obtaining key " + locator + " " + digest);
+		Log.d(TAG, "Obtaining key " + locator + " " + digest);
 
 		if (digest == null || locator == null) {
-			Log.warning("Don't have enough information to fetch public key of "
+			Log.w(TAG, "Don't have enough information to fetch public key of "
 					+ node.uri.toURIString());
 			return null;
 		}
@@ -251,10 +251,10 @@ public class DataEncryptor {
 		try {
 			key = kmgr.getPublicKey(digest, locator);
 			if (key == null)
-				Log.warning("No key available " + locator + " " + digest);
+				Log.w(TAG, "No key available " + locator + " " + digest);
 		}
 		catch (IOException ex) {
-			Log.error("Unable to obtain key for " + node.uri.toURIString() + ": "
+			Log.e(TAG, "Unable to obtain key for " + node.uri.toURIString() + ": "
 					+ ex.getMessage());
 			return null;
 		}
@@ -290,7 +290,7 @@ public class DataEncryptor {
 		KeyManager keymgr;
 		PrivateKey private_key;
 
-		Log.debug("Decrypting data using my key: " + _stream_key_digest);
+		Log.d(TAG, "Decrypting data using my key: " + _stream_key_digest);
 
 		keymgr = config.getKeyManager();
 		assert keymgr != null;
@@ -388,4 +388,6 @@ public class DataEncryptor {
 	 * keys associated with our stream
 	 */
 	protected PublisherPublicKeyDigest _stream_key_digest;
+	
+	private final String TAG = "DataEncryptorClass";
 }

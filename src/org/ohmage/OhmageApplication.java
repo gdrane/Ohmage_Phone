@@ -61,8 +61,6 @@ public class OhmageApplication extends Application implements iApplication {
 	
 	private static final String TAG = "OhmageApplication";
 	
-	private static final String APP_NAME = "OhmageApplication";
-	
 	private transient ContentName _base_uri;
 	
 	private transient Map<String, DataStream> _data_stream;
@@ -113,7 +111,6 @@ public class OhmageApplication extends Application implements iApplication {
 		}
 		
 	}
-	
 	
 	public void resetAll() {
 		//clear everything?
@@ -250,7 +247,7 @@ public class OhmageApplication extends Application implements iApplication {
 		ApplicationInfo ai = getApplicationInfo();
 		String name = (String)pm.getApplicationLabel(ai);
 		try {
-			_base_uri = config.getRoot().append(name);
+			_base_uri = config.getRoot().append(OhmagePDVManager.getAppInstance());
 		}
 		catch (MalformedContentNameStringException ex) {
 			throw new Error("Unable to set base name", ex);

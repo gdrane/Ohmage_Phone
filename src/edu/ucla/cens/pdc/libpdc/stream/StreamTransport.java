@@ -18,7 +18,7 @@ import edu.ucla.cens.pdc.libpdc.exceptions.PDCParseException;
 import edu.ucla.cens.pdc.libpdc.exceptions.PDCTransmissionException;
 import edu.ucla.cens.pdc.libpdc.transport.PDCPublisher;
 import edu.ucla.cens.pdc.libpdc.transport.PDCReceiver;
-import edu.ucla.cens.pdc.libpdc.util.Log;
+import android.util.Log;
 import edu.ucla.cens.pdc.libpdc.util.StringUtil;
 import java.io.IOException;
 import java.security.PrivateKey;
@@ -39,6 +39,7 @@ import org.ccnx.ccn.protocol.KeyLocator;
 import org.ccnx.ccn.protocol.MalformedContentNameStringException;
 import org.ccnx.ccn.protocol.PublisherPublicKeyDigest;
 import org.ccnx.ccn.protocol.SignedInfo;
+import org.ohmage.pdc.OhmagePDVManager;
 
 /**
  *
@@ -56,7 +57,10 @@ public class StreamTransport {
 		this._ccn_handle = handle;
 
 		try {
-			this.base_name = _stream.app.getBaseName().append(_stream.data_stream_id);
+			this.base_name = _stream.app.getBaseName().
+					append(OhmagePDVManager.getHashedDeviceId()).
+					append(_stream.data_stream_id);
+			Log.i(TAG, "Base name in Stream transport"+ this.base_name);
 		}
 		catch (MalformedContentNameStringException ex) {
 			throw new PDCException("Unable to create base name for the data stream",
@@ -106,23 +110,23 @@ public class StreamTransport {
 			final PrivateKey private_key = keymgr.getSigningKey(digest);
 
 			if (public_key == null || private_key == null) {
-				Log.error("!!! have keys in config but not in key manager !!!");
-				Log.debug(public_key);
-				Log.debug(private_key);
+				Log.e(TAG, "!!! have keys in config but not in key manager !!!");
+				Log.d(TAG, public_key.toString());
+				Log.d(TAG, private_key.toString());
 				digest = null;
 			}
 		}
 
 		if (digest != null)
-			Log.info("Keys for " + _stream.data_stream_id + " loaded, hash: " + digest);
+			Log.i(TAG, "Keys for " + _stream.data_stream_id + " loaded, hash: " + digest);
 		else {
-			Log.info("Generating keys for " + _stream.data_stream_id + "...");
+			Log.i(TAG, "Generating keys for " + _stream.data_stream_id + "...");
 
 			digest = _encryptor.generateStreamKeys();
 			if (digest == null)
 				throw new Error("Unable to obtain stream keys");
 			else
-				Log.info("Generated keys for " + _stream.data_stream_id + ": " + digest);
+				Log.i(TAG, "Generated keys for " + _stream.data_stream_id + ": " + digest);
 		}
 	}
 
@@ -151,7 +155,7 @@ public class StreamTransport {
 			record = _stream.getStorage().getRecord(data_id);
 
 			if (record == null) {
-				Log.warning(data_id + " does not exist");
+				Log.w(TAG, data_id + " does not exist");
 				return false;
 			}
 
@@ -176,11 +180,13 @@ public class StreamTransport {
 
 		assert interest != null;
 		assert arguments != null;
-
+		
+		String start = arguments.stringComponent(3);
+		String end = arguments.stringComponent(4);
 		// Content of the data packet
-		if (arguments.count() == 0)
+		if (start.equals("0") && end.equals("0"))
 			ids = _stream.getStorage().getRangeIds();
-		else if (arguments.count() == 1)
+		else if (!start.equals("0") && end.equals("0"))
 			ids = _stream.getStorage().getRangeIds(arguments.stringComponent(0));
 		else
 			ids = _stream.getStorage().getRangeIds(arguments.stringComponent(0),
@@ -254,18 +260,19 @@ public class StreamTransport {
 		if (receiver.getAuthenticator() == null)
 			throw new PDCTransmissionException("Authenticator is not set");
 
-		Log.info("### SENDING SETUP INTEREST TO THE RECEIVER ### (Step 4)");
+		Log.i(TAG, "### SENDING SETUP INTEREST TO THE RECEIVER ### (Step 4)");
 
 		try {
-			name = _stream.getReceiverStreamURI(receiver).
-					append(Constants.STR_CONTROL).append("setup").
-					append(extraInfo);
+			name = _stream.getReceiverURI(receiver).append(extraInfo).
+					append(_stream.data_stream_id).
+					append(Constants.STR_CONTROL).append("setup");
 			co = _ccn_handle.get(name, SystemConfiguration.MEDIUM_TIMEOUT);
 
 			// No verification since trust isn't established yet
-
-			if (co != null && new String(co.content()).equals("ACK"))
-				return true;
+			if (co != null && new String(co.content()).equals("ACK")) {
+				Log.i(TAG, "Returned a ACK for setup request");
+				return true;	
+			}
 		}
 		catch (MalformedContentNameStringException ex) {
 			throw new Error("Unable to form a proper name for the request", ex);
@@ -284,17 +291,17 @@ public class StreamTransport {
 			publishACK(interest);
 		}
 		catch (PDCTransmissionException ex) {
-			Log.error("Error while sending ack: " + ex.getLocalizedMessage());
+			Log.e(TAG, "Error while sending ack: " + ex.getLocalizedMessage());
 		}
 
-		Log.info(
+		Log.i(TAG, 
 				"### GOT PULL REQUEST; ATTEMPING TO FETCH DATA FROM THE PRODUCER ### (Step T2)");
 
 		try {
 			fetchNewData();
 		}
 		catch (PDCTransmissionException ex) {
-			Log.error("Error while pulling new records: " + ex.getLocalizedMessage());
+			Log.e(TAG, "Error while pulling new records: " + ex.getLocalizedMessage());
 			return false;
 		}
 
@@ -321,9 +328,9 @@ public class StreamTransport {
 					ex);
 		}
 
-		Log.debug("requesting stream_info data for " + uri.toURIString());
+		Log.d(TAG, "requesting stream_info data for " + uri.toURIString());
 
-		Log.info("### REQUESTING STREAM INFO ### (Step 7)");
+		Log.i(TAG, "### REQUESTING STREAM INFO ### (Step 7)");
 
 		try {
 			object = _ccn_handle.get(uri, SystemConfiguration.MEDIUM_TIMEOUT);
@@ -350,7 +357,7 @@ public class StreamTransport {
 
 		try {
 			StreamInfo si = new StreamInfo().fromBSON(decrypted);
-			Log.debug("Got StreamInfo: " + si);
+			Log.d(TAG, "Got StreamInfo: " + si);
 			_stream.processStreamInfo(si);
 		}
 		catch (PDCParseException ex) {
@@ -396,7 +403,7 @@ public class StreamTransport {
 					_stream.app.getAppName(), _stream.data_stream_id, start, end));
 		}
 
-		Log.debug("Requesting: " + uri.toURIString());
+		Log.d(TAG, "Requesting: " + uri.toURIString());
 
 		try {
 			response = _ccn_handle.get(uri, SystemConfiguration.LONG_TIMEOUT);
@@ -411,7 +418,7 @@ public class StreamTransport {
 		// Checking authenticity
 		final ContentVerifier verifier = _ccn_handle.keyManager().getDefaultVerifier();
 		if (!verifier.verify(response)) {
-			Log.warning("Got a packet which I can't verify credentials.");
+			Log.w(TAG, "Got a packet which I can't verify credentials.");
 			return null;
 		}
 
@@ -422,7 +429,7 @@ public class StreamTransport {
 			if (isFinalFailure(false))
 				throw new PDCTransmissionException("Unable to decrypt the message", ex);
 
-			Log.info(
+			Log.i(TAG, 
 					"### UNABLE TO DECRYPT THE DATA; (RE)FETCHING STREAMINFO ### (Step 7)");
 
 			fetchStreamInfo();
@@ -448,7 +455,7 @@ public class StreamTransport {
 
 		assert content_id != null;
 
-		Log.info("### FETCHING RECORD " + content_id + " ### (Step T4)");
+		Log.i(TAG, "### FETCHING RECORD " + content_id + " ### (Step T4)");
 
 		publisher_ds = _stream.getPublisherStreamURI();
 
@@ -470,7 +477,7 @@ public class StreamTransport {
 			final ContentVerifier verifier = _ccn_handle.keyManager().
 					getDefaultVerifier();
 			if (!verifier.verify(response)) {
-				Log.warning("Got a packet which I can't verify credentials.");
+				Log.w(TAG, "Got a packet which I can't verify credentials.");
 				return null;
 			}
 
@@ -502,7 +509,7 @@ public class StreamTransport {
 		pull_uri = _stream.getReceiverStreamURI(receiver);
 		pull_uri = pull_uri.append(Constants.STR_CONTROL).append("pull");
 
-		Log.debug("Requesting: " + pull_uri.toURIString());
+		Log.d(TAG, "Requesting: " + pull_uri.toURIString());
 
 		_ccn_handle.get(pull_uri, SystemConfiguration.LONG_TIMEOUT);
 	}
@@ -520,7 +527,7 @@ public class StreamTransport {
 
 		publisher = _stream.getPublisher();
 		if (publisher == null) {
-			Log.warning("No uplink defined; fetching aborted");
+			Log.w(TAG, "No uplink defined; fetching aborted");
 			return true;
 		}
 
@@ -532,7 +539,7 @@ public class StreamTransport {
 					"Unable to fetch id of last record from the database", ex);
 		}
 
-		Log.info("### REQUESTING LIST OF NEW DATA IDS ### (Step T3)");
+		Log.i(TAG, "### REQUESTING LIST OF NEW DATA IDS ### (Step T3)");
 
 		if (last_entry == null)
 			ids = fetchList();
@@ -540,25 +547,25 @@ public class StreamTransport {
 			ids = fetchList(last_entry);
 
 		if (ids == null) {
-			Log.warning("No response when fetching ids");
+			Log.w(TAG, "No response when fetching ids");
 			return false;
 		}
 
 		if (ids.isEmpty()) {
-			Log.info("No more records to pull");
+			Log.i(TAG, "No more records to pull");
 			return true;
 		}
 
 		try {
 			for (final String data_id : ids) {
-				Log.debug("pulling: " + data_id);
+				Log.d(TAG, "pulling: " + data_id);
 				record = fetchRecord(data_id);
 				if (record == null) {
-					Log.warning("No response when fetching record " + data_id);
+					Log.w(TAG, "No response when fetching record " + data_id);
 					return false;
 				}
 
-				Log.debug("got: " + JSON.serialize(record));
+				Log.d(TAG, "got: " + JSON.serialize(record));
 				storage.insertRecord(record);
 			}
 		}
@@ -599,7 +606,7 @@ public class StreamTransport {
 			uri = _stream.getReceiverStreamURI(receiver);
 			uri = uri.append(Constants.STR_CONTROL).append("last");
 
-			Log.debug("Requesting: " + uri.toURIString());
+			Log.d(TAG, "Requesting: " + uri.toURIString());
 
 			final ContentObject co = _ccn_handle.get(uri,
 					SystemConfiguration.MEDIUM_TIMEOUT);
@@ -615,7 +622,7 @@ public class StreamTransport {
 
 			final String id = new String(content);
 			if (!ObjectId.isValid(id)) {
-				Log.error("Got invalid id: " + id + " from: "
+				Log.e(TAG, "Got invalid id: " + id + " from: "
 						+ receiver.uri.toURIString());
 				return "";
 			}
@@ -623,7 +630,7 @@ public class StreamTransport {
 			return id;
 		}
 		catch (IOException ex) {
-			Log.warning("No response from " + receiver.uri.toURIString());
+			Log.w(TAG, "No response from " + receiver.uri.toURIString());
 			return null;
 		}
 		catch (MalformedContentNameStringException ex) {
@@ -685,4 +692,6 @@ public class StreamTransport {
 	private transient CCNHandle _ccn_handle;
 
 	private transient int _invalid_key_retry = 1;
+	
+	private static final String TAG = "StreamTransportClass";
 }

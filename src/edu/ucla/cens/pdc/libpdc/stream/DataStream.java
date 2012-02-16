@@ -20,6 +20,7 @@ import edu.ucla.cens.pdc.libpdc.util.Log;
 import edu.ucla.cens.pdc.libpdc.util.StringUtil;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
@@ -28,6 +29,7 @@ import org.ccnx.ccn.protocol.ContentName;
 import org.ccnx.ccn.protocol.KeyLocator;
 import org.ccnx.ccn.protocol.MalformedContentNameStringException;
 import org.ccnx.ccn.protocol.PublisherPublicKeyDigest;
+import org.ohmage.pdc.OhmagePDVManager;
 
 /**
  *
@@ -173,6 +175,22 @@ public class DataStream implements iDataStream, iState {
 
 		return result;
 	}
+	
+	public ContentName getReceiverURI(PDCReceiver receiver)
+			throws MalformedContentNameStringException
+	{
+		ContentName uri, result;
+
+		assert app != null;
+		assert receiver != null;
+
+		if (!_receivers.contains(receiver))
+			throw new Error("Got not my receiver (bug?)");
+
+		uri = receiver.uri;
+		assert uri != null;
+		return uri;
+	}
 
 	public void setPublisher(PDCPublisher node)
 	{
@@ -227,9 +245,10 @@ public class DataStream implements iDataStream, iState {
 		assert digest != null;
 
 		try {
-			name = node.uri.append(app.getAppName()).append(data_stream_id).append(
-					Constants.STR_CONTROL).append("key");
-
+			name = node.uri.append(OhmagePDVManager.getHashedDeviceId()).
+					append(data_stream_id).append(Constants.STR_CONTROL).
+					append("key");
+			
 			return new KeyLocator(name, digest);
 		}
 		catch (MalformedContentNameStringException ex) {
@@ -370,6 +389,20 @@ public class DataStream implements iDataStream, iState {
 	{
 		return getObjectState().toByteArray();
 	}
+	
+	public boolean isSetup() {
+		return _is_setup;
+	}
+	
+	public void updateStreamSetupStatus(StreamInfo si) {
+		byte[] enc_key = si.getStreamKey();
+		byte[] stream_enc_key = _transport._encryptor.getEncryptKey();
+		if(Arrays.equals(enc_key, stream_enc_key))	{
+			_is_setup = true;
+		} else {
+			_is_setup = false;
+		}
+	}
 // </editor-fold>
 
 	/**
@@ -402,4 +435,9 @@ public class DataStream implements iDataStream, iState {
 	 * receivers of our DS
 	 */
 	protected List<PDCReceiver> _receivers = new ArrayList<PDCReceiver>();
+	
+	/**
+	 *  Tells whether the stream is setup
+	 */
+	boolean _is_setup = false;
 }

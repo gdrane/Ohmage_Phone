@@ -15,6 +15,8 @@ import org.ccnx.ccn.protocol.KeyLocator;
 import org.ccnx.ccn.protocol.PublisherPublicKeyDigest;
 import org.ccnx.ccn.protocol.SignedInfo;
 
+import android.util.Log;
+
 /**
  *
  * @author Derek Kulinski
@@ -31,6 +33,7 @@ public class CommunicationHelper {
 		KeyManager keymgr;
 		KeyLocator key_locator;
 		PrivateKey signing_key;
+		final String TAG = "CommunicationHELPer";
 
 		assert interest != null;
 		assert sender_identity != null;
@@ -49,8 +52,12 @@ public class CommunicationHelper {
 		try {
 			si = new SignedInfo(sender_identity, type, key_locator, freshness, null);
 			co = new ContentObject(interest.name(), si, data, signing_key);
-
-			handle.put(co);
+			
+			if((co = handle.put(co)) == null) {
+				Log.e(TAG, "Could not sent the object properly");
+			} else {
+				Log.v(TAG, co.toString());
+			}
 
 			return true;
 		}

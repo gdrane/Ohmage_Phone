@@ -7,7 +7,6 @@ package edu.ucla.cens.pdc.libpdc.core;
 import edu.ucla.cens.pdc.libpdc.Application;
 import edu.ucla.cens.pdc.libpdc.Constants;
 import edu.ucla.cens.pdc.libpdc.stream.DataStream;
-import edu.ucla.cens.pdc.libpdc.util.Log;
 import edu.ucla.cens.pdc.libpdc.util.MiscFuncs;
 import java.io.IOException;
 import java.util.HashMap;
@@ -16,6 +15,9 @@ import org.ccnx.ccn.CCNFilterListener;
 import org.ccnx.ccn.protocol.ContentName;
 import org.ccnx.ccn.protocol.Interest;
 import org.ccnx.ccn.protocol.MalformedContentNameStringException;
+import org.ohmage.OhmageApplication;
+import org.ohmage.pdc.OhmagePDVManager;
+import android.util.Log;
 
 /**
  *
@@ -46,7 +48,7 @@ final public class PDVInstance implements CCNFilterListener {
 		_config.getCCNHandle().registerFilter(root, this);
 
 		if (GlobalConfig.hasFeature(GlobalConfig.FEAT_MANAGE)) {
-			Log.info("PDV Instance Root: " + root.toURIString());
+			Log.v(TAG, "PDV Instance Root: " + root.toURIString());
 			MiscFuncs.printKeyToLog(this._config.getKeyManager().getKeysForWC().
 					getPublic(), "Public Key: ");
 		}
@@ -90,7 +92,7 @@ final public class PDVInstance implements CCNFilterListener {
 		name = interest.name();
 		postfix = name.postfix(root);
 
-		Log.info("Got interest: " + name + ", postfix: " + postfix);
+		Log.v(TAG,"Got interest: " + name + ", postfix: " + postfix);
 
 		if (postfix == null || postfix.count() < 2)
 			return false;
@@ -99,17 +101,64 @@ final public class PDVInstance implements CCNFilterListener {
 		if (postfix.stringComponent(0).equals(Constants.STR_MANAGE)) {
 			GenericCommand cmd = this._generic_commands.get(Constants.STR_MANAGE);
 			if (cmd == null) {
-				Log.error("manage command not supported by this PDV Instance.");
+				Log.e(TAG,"manage command not supported by this PDV Instance.");
 				return false;
 			}
 			return cmd.processCommand(postfix.subname(1, postfix.count() - 1),
 					interest);
 		}
 
+		if(postfix.stringComponent(0).equals(
+				OhmagePDVManager.getAppInstance())) {
+			String origin_id = postfix.stringComponent(1);
+			Log.v(TAG, "Origin Id received in the interest : " + origin_id);
+			Log.v(TAG, "Origin Id stored in the device : " + 
+			OhmagePDVManager.getHashedDeviceId());
+			// Check whether interest has come to the right location
+			if(!origin_id.equals(OhmagePDVManager.getHashedDeviceId()))
+				return false;
+			
+			OhmageApplication ohmageapp = (OhmageApplication)
+					OhmagePDVManager.getInstance().getAndroidApplication();
+			if (ohmageapp == null) {
+				Log.w(TAG,"Application "
+						+ " doesn't exist.");
+				return false;
+			}
+
+			ds_name = postfix.stringComponent(2);
+			if(ds_name.equals(Constants.STR_MANAGE)) {
+				GenericCommand cmd = this._generic_commands.get(Constants.STR_MANAGE);
+				if (cmd == null) {
+					Log.e(TAG,"manage command not supported by this PDV Instance.");
+					return false;
+				}
+				return cmd.processCommand(
+						 postfix.subname(1, postfix.count() - 1),
+						interest);
+			}
+			ds = ohmageapp.getDataStream(ds_name);
+			if (ds == null) {
+				Log.w(TAG,"Stream " + ds_name + " doesn't exist.");
+				return false;
+			}
+
+			command_name = postfix.stringComponent(3);
+			if (!_stream_commands.containsKey(command_name)) {
+				Log.w(TAG,"Unknown command: " + command_name);
+				return false;
+			}
+
+			ContentName remain = postfix.subname(1, postfix.count() - 1);
+			StreamCommand cmd = _stream_commands.get(command_name);
+			
+			return cmd.processCommand(ds, remain, interest);
+		}
+		
 		app_name = postfix.stringComponent(0);
 		app = _config.getApplication(app_name);
 		if (app == null) {
-			Log.warning("Application " + app_name
+			Log.w(TAG,"Application " + app_name
 					+ " doesn't exist.");
 			return false;
 		}
@@ -125,13 +174,13 @@ final public class PDVInstance implements CCNFilterListener {
 		ds_name = postfix.stringComponent(1);
 		ds = app.getDataStream(ds_name);
 		if (ds == null) {
-			Log.warning("Stream " + ds_name + " doesn't exist.");
+			Log.w(TAG,"Stream " + ds_name + " doesn't exist.");
 			return false;
 		}
 
 		command_name = postfix.stringComponent(2);
 		if (!_stream_commands.containsKey(command_name)) {
-			Log.warning("Unknown command: " + command_name);
+			Log.w(TAG,"Unknown command: " + command_name);
 			return false;
 		}
 
@@ -151,11 +200,13 @@ final public class PDVInstance implements CCNFilterListener {
 		_generic_commands.put(command.getCommandName(), command);
 	}
 
-	final private Map<String, GenericCommand> _generic_commands = new HashMap<String, GenericCommand>(
-			1);
+	final private Map<String, GenericCommand> _generic_commands = 
+			new HashMap<String, GenericCommand>(1);
 
-	final private Map<String, StreamCommand> _stream_commands = new HashMap<String, StreamCommand>(
-			2);
+	final private Map<String, StreamCommand> _stream_commands = 
+			new HashMap<String, StreamCommand>(2);
 
 	final private GlobalConfig _config = GlobalConfig.getInstance();
+	
+	private final static String TAG = "PDVInstanceTAG";
 }

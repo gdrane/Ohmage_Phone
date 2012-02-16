@@ -8,8 +8,10 @@ import edu.ucla.cens.pdc.libpdc.Application;
 import edu.ucla.cens.pdc.libpdc.Constants;
 import edu.ucla.cens.pdc.libpdc.exceptions.PDCDatabaseException;
 import edu.ucla.cens.pdc.libpdc.exceptions.PDCEncryptionException;
+import edu.ucla.cens.pdc.libpdc.exceptions.PDCTransmissionException;
 import edu.ucla.cens.pdc.libpdc.iDataStream;
 import edu.ucla.cens.pdc.libpdc.transport.CollectionTransport;
+import edu.ucla.cens.pdc.libpdc.transport.CommunicationHelper;
 import edu.ucla.cens.pdc.libpdc.util.EncryptionHelper;
 import edu.ucla.cens.pdc.libpdc.util.Log;
 import edu.ucla.cens.pdc.libpdc.util.MiscFuncs;
@@ -27,10 +29,15 @@ import java.util.logging.Logger;
 import javax.crypto.SecretKey;
 import org.ccnx.ccn.config.SystemConfiguration;
 import org.ccnx.ccn.config.UserConfiguration;
+import org.ccnx.ccn.impl.CCNFlowControl.SaveType;
+import org.ccnx.ccn.io.content.PublicKeyObject;
+import org.ccnx.ccn.protocol.CCNTime;
 import org.ccnx.ccn.protocol.ContentName;
 import org.ccnx.ccn.protocol.ContentObject;
 import org.ccnx.ccn.protocol.Interest;
+import org.ccnx.ccn.protocol.KeyLocator;
 import org.ccnx.ccn.protocol.MalformedContentNameStringException;
+import org.ccnx.ccn.protocol.PublisherPublicKeyDigest;
 
 /**
  * Handles the manage command postfix
@@ -48,6 +55,8 @@ public class ManageCommand extends GenericCommand
     public static final String STR_DS      = "datastreams";
     public static final String STR_DR      = "datarecords";
     public static final String STR_isAuth  = "isAuthenticated";
+    public static final String DEFAULT_PUBLIC_KEY = "default_public_key";
+    private final static String TAG = "MANAGE_COMMAND_CLASS";
 
     //private member variables
     private GlobalConfig    _globalConfig;
@@ -89,11 +98,57 @@ public class ManageCommand extends GenericCommand
         //check for login command
         if(postfix.stringComponent(0).equals(LOGIN_CMD))
             return handleLoginCmd(postfix, interest);
-
+        if(postfix.stringComponent(2).equals(DEFAULT_PUBLIC_KEY))
+        	return handleDefaultPublicKeyCmd(postfix, interest);
+        
+        if(postfix.stringComponent(2).equals("default_publisherpublickeydigest"))
+        	return handleDefaultPublisherPublicKeyDigest(postfix, interest);
         //more commands here...
 
         //if we get here, the command isn't supported
         return false;
+    }
+    
+    private boolean handleDefaultPublicKeyCmd(ContentName postfix, Interest interest) {
+    	final GlobalConfig config = GlobalConfig.getInstance();
+		final PDCKeyManager keymgr = config.getKeyManager();
+		final PublicKey public_key = keymgr.getDefaultPublicKey();
+		final PublisherPublicKeyDigest digest = keymgr.getDefaultKeyID();
+		final CCNTime version = keymgr.getKeyVersion(digest);
+		assert public_key != null;
+		assert version != null;
+
+		android.util.Log.i(TAG, "### GOT KEY REQUEST; SENDING MY KEY ### (" + digest + ")");
+
+		final KeyLocator locator = new KeyLocator(interest.name(), digest);
+		try {
+			PublicKeyObject pko = new PublicKeyObject(interest.name(), public_key,
+					SaveType.RAW, digest, locator, config.getCCNHandle());
+			pko.getFlowControl().disable();
+			pko.save(version, interest);
+			pko.close();
+
+			return true;
+		}
+		catch (IOException ex) {
+			android.util.Log.e(TAG, "Unable to send the key: " + ex.getLocalizedMessage());
+		}
+    	return false;
+    }
+    
+    private boolean handleDefaultPublisherPublicKeyDigest(ContentName postfix, 
+    		Interest interest) {
+    	final GlobalConfig config = GlobalConfig.getInstance();
+    	final PDCKeyManager keymgr = config.getKeyManager();
+    	try {
+			return CommunicationHelper.publishUnencryptedData(config.getCCNHandle(),
+					interest, keymgr.getDefaultKeyID(), 
+					keymgr.getDefaultKeyID().toString().getBytes(), 1);
+		} catch (PDCTransmissionException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+    	return false;
     }
 
     /**

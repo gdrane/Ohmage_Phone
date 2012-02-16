@@ -75,6 +75,8 @@ public class DashboardActivity extends BaseActivity {
 
 			@Override
 			protected void onPostExecute(CampaignReadResponse response) {
+				if(response == null)
+					return;
 				super.onPostExecute(response);
 				getActionBar().setProgressVisible(false);
 			}
