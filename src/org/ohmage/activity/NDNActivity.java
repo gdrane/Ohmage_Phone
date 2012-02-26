@@ -250,8 +250,8 @@ public final class NDNActivity extends Activity implements
 		final String recURL = settings.getString(PREF_REC_URL, DEFAULT_REC_URL);
 		final String recAuth = settings.getString(PREF_REC_AUTH,
 		 DEFAULT_REC_AUTH);
-		final String recRemHostIP = settings.getString(PREF_REC_REMHOSTIP, "");
-		final String recRemHostPort = settings.getString(PREF_REC_REMHOSTPORT, "");
+		final String recRemHostIP = settings.getString(PREF_REC_REMHOSTIP, DEFAULT_REMOTEHOST );
+		final String recRemHostPort = settings.getString(PREF_REC_REMHOSTPORT, DEFAULT_REMOTEPORT);
 		startPDVDone = settings.getBoolean(PREF_REC_STARTPDVDONE, false);
 		
 		_etRecURL.setText(recURL);
@@ -352,9 +352,11 @@ public final class NDNActivity extends Activity implements
 	private static final String DEFAULT_REC_URL = 
 			"ccnx:/ndn/ucla.edu/apps/borges/ohmagepdv";
 
-	private static final String DEFAULT_REMOTEHOST = "131.179.210.125";
+	private static final String DEFAULT_REMOTEHOST = "192.168.1.8";
 
 	private static final String DEFAULT_REMOTEPORT = "9695";
+	
+	private static final String DEFAULT_USERNAME = "amrutha.old";
 
 	private static final String DEFAULT_REC_AUTH = "test";
 

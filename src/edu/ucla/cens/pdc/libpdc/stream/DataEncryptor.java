@@ -275,7 +275,7 @@ public class DataEncryptor {
 		assert data != null;
 
 		PublicKey public_key;
-
+		Log.v(TAG, "PDC Node name used to fetch key: " + node.uri);
 		public_key = getPublicKey(node);
 		if (public_key == null)
 			throw new PDCEncryptionException("Public key not available");

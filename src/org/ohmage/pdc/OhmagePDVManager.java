@@ -144,9 +144,9 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 		PublisherPublicKeyDigest digest = null;
 		try {
 			digest = new PublisherPublicKeyDigest(
-					"V4W7ifzgwncXbD/oi4oJZCWZzEC/eFuk7oT0+peBSOI=");
+					"gdLbPbg1aXLg72inoAMlwLuANahIoa7u0lx1KvCqqaU=");
 			_configuration_digest = new PublisherPublicKeyDigest(
-					"Af1ryRDFXskL4iLT7htVyfdfGE+i6kSdfZv71VWbwHM=");
+					"CgPgcOQGWbksHFmW8QJua331EKsV48v+F1J8qjZAJBc=");
 			
 		} catch (IOException e2) {
 			// TODO Auto-generated catch block
@@ -202,7 +202,7 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 				*/
 				// Giving name to config key
 				_config_keyname = ContentName.fromURI(_rec_url).
-						append(getHashedDeviceId()).append("manage").
+						append("manage").
 						append("configuration_key");
 				// config.storeStateRecursive();
 				Log.i(TAG, "New Config.");

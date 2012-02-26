@@ -171,7 +171,7 @@ public class DataStream implements iDataStream, iState {
 		uri = receiver.uri;
 		assert uri != null;
 
-		result = uri.append(app.getAppName()).append(data_stream_id);
+		result = uri.append(data_stream_id);
 
 		return result;
 	}
@@ -245,9 +245,9 @@ public class DataStream implements iDataStream, iState {
 		assert digest != null;
 
 		try {
-			name = node.uri.append(OhmagePDVManager.getHashedDeviceId()).
+			name = node.uri.
 					append(data_stream_id).append(Constants.STR_CONTROL).
-					append("key");
+					append("key").append(OhmagePDVManager.getHashedDeviceId());
 			
 			return new KeyLocator(name, digest);
 		}

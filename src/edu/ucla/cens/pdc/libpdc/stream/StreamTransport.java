@@ -263,9 +263,10 @@ public class StreamTransport {
 		Log.i(TAG, "### SENDING SETUP INTEREST TO THE RECEIVER ### (Step 4)");
 
 		try {
-			name = _stream.getReceiverURI(receiver).append(extraInfo).
+			name = _stream.getReceiverURI(receiver).
 					append(_stream.data_stream_id).
-					append(Constants.STR_CONTROL).append("setup");
+					append(Constants.STR_CONTROL).append("setup").
+					append(extraInfo);
 			co = _ccn_handle.get(name, SystemConfiguration.MEDIUM_TIMEOUT);
 
 			// No verification since trust isn't established yet
@@ -507,7 +508,8 @@ public class StreamTransport {
 			return;
 
 		pull_uri = _stream.getReceiverStreamURI(receiver);
-		pull_uri = pull_uri.append(Constants.STR_CONTROL).append("pull");
+		pull_uri = pull_uri.append(Constants.STR_CONTROL).append("pull")
+				.append(OhmagePDVManager.getHashedDeviceId());
 
 		Log.d(TAG, "Requesting: " + pull_uri.toURIString());
 

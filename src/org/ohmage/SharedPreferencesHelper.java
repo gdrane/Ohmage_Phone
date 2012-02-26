@@ -70,7 +70,7 @@ public class SharedPreferencesHelper {
 	}
 	
 	public String getUsername() {
-		return mPreferences.getString(KEY_USERNAME, "");
+		return mPreferences.getString(KEY_USERNAME, "amrutha.old");
 	}
 	
 	public boolean putUsername(String username) {
@@ -78,7 +78,7 @@ public class SharedPreferencesHelper {
 	}
 	
 	public String getHashedPassword() {
-		return mPreferences.getString(KEY_PASSWORD_HASHED, "");
+		return mPreferences.getString(KEY_PASSWORD_HASHED, "Amrutha.old1");
 	}
 	
 	public boolean putHashedPassword(String hashedPassword) {

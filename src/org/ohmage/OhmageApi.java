@@ -47,7 +47,11 @@ import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpConnectionParams;
 import org.apache.http.params.HttpParams;
 import org.apache.http.util.EntityUtils;
+import org.bson.BSONDecoder;
+import org.bson.BSONEncoder;
+import org.bson.BSONObject;
 import org.ccnx.ccn.config.SystemConfiguration;
+import org.ccnx.ccn.impl.support.DataUtils;
 import org.ccnx.ccn.protocol.ContentName;
 import org.ccnx.ccn.protocol.ContentObject;
 import org.ccnx.ccn.protocol.KeyLocator;
@@ -60,6 +64,7 @@ import org.json.JSONObject;
 import android.content.Context;
 import edu.ucla.cens.pdc.libpdc.core.GlobalConfig;
 import edu.ucla.cens.pdc.libpdc.core.PDCKeyManager;
+import edu.ucla.cens.pdc.libpdc.exceptions.PDCEncryptionException;
 import edu.ucla.cens.systemlog.Log;
 import org.ohmage.pdc.OhmagePDVManager;
 import org.ohmage.util.NDNUtils;
@@ -430,16 +435,31 @@ public class OhmageApi {
 			ContentName keyName = OhmagePDVManager.getInstance().
 					getConfigKeyLocator();
 			KeyLocator locator = new KeyLocator(keyName, digest);
-			byte[] encrypted_data = NDNUtils.encryptConfigData(locator, username+ "," + hashedPassword);
+			if(hashedPassword == null)
+				Log.e(TAG, "Hashed password is null");
+			byte[] encrypted_data = NDNUtils.encryptConfigData(locator, username
+					, hashedPassword);			
+			if(encrypted_data == null)
+				return null;
+			Log.i(TAG, "Base64encoded string : " + DataUtils.base64Encode(encrypted_data));
+		//	for(byte b : encrypted_data)
+			//	Log.i(TAG, "Byte : " + b);
+			
 			try {
-				ContentName campaignReadName = config.getRoot().
-						append(OhmagePDVManager.getAppInstance()).
-						append(OhmagePDVManager.getHashedDeviceId()).
+				ContentName campaignReadName = 
+						ContentName.fromURI("ccnx:/ndn/ucla.edu/apps/borges/ohmagepdv").
 						append("manage/campaign/read").append(outputFormat).
-						append(new String(encrypted_data));
-				
+						append(new String(DataUtils.base64Encode(encrypted_data))).
+						append(OhmagePDVManager.getHashedDeviceId());
+				Log.i(TAG, "Campaign Name to be read: " + campaignReadName);
 				ContentObject co = config.getCCNHandle().get(campaignReadName, 
 						SystemConfiguration.LONG_TIMEOUT);
+				if(co == null) {
+					Log.e(TAG, "Returned NULL Content Object");
+					return null;
+				} else {
+					Log.i(TAG, "Content Object: " + co);
+				}
 				byte[] data = NDNUtils.decryptConfigData(co.content());
 				try {
 					JSONObject jsonObj = 
@@ -500,13 +520,13 @@ public class OhmageApi {
 			KeyLocator locator = new KeyLocator(keyName, digest);
 			byte[] encrypted_data = 
 					NDNUtils.encryptConfigData(locator, 
-							username+ "," + hashedPassword);
+							username , hashedPassword);
 			try {
 				ContentName campaignXMLReadName = config.getRoot().
 						append(OhmagePDVManager.getAppInstance()).
-						append(OhmagePDVManager.getHashedDeviceId()).
 						append("manage/campaign/read").append("xml").
-						append(campaignUrn).append(new String(encrypted_data));
+						append(campaignUrn).append(new String(DataUtils.base64Encode(encrypted_data))).
+						append(OhmagePDVManager.getHashedDeviceId());
 				ContentObject co = config.getCCNHandle().get(campaignXMLReadName, 
 						SystemConfiguration.LONG_TIMEOUT);
 				byte[] data = NDNUtils.decryptConfigData(co.content());
