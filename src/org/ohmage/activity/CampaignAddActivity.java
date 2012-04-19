@@ -1,6 +1,15 @@
 package org.ohmage.activity;
 
 
+import java.io.IOException;
+
+import org.ccnx.ccn.config.SystemConfiguration;
+import org.ccnx.ccn.impl.support.DataUtils;
+import org.ccnx.ccn.protocol.ContentName;
+import org.ccnx.ccn.protocol.ContentObject;
+import org.ccnx.ccn.protocol.KeyLocator;
+import org.ccnx.ccn.protocol.MalformedContentNameStringException;
+import org.ccnx.ccn.protocol.PublisherPublicKeyDigest;
 import org.ohmage.OhmageApi.CampaignReadResponse;
 import org.ohmage.R;
 import org.ohmage.SharedPreferencesHelper;
@@ -8,7 +17,13 @@ import org.ohmage.controls.ActionBarControl.ActionListener;
 import org.ohmage.db.DbContract.Campaigns;
 import org.ohmage.fragments.CampaignListFragment;
 import org.ohmage.fragments.CampaignListFragment.OnCampaignActionListener;
+import org.ohmage.pdc.OhmagePDVManager;
 import org.ohmage.ui.BaseSingleFragmentActivity;
+import org.ohmage.util.NDNUtils;
+
+import edu.ucla.cens.pdc.libpdc.core.GlobalConfig;
+import edu.ucla.cens.pdc.libpdc.stream.DataStream;
+import edu.ucla.cens.pdc.libpdc.transport.PDCReceiver;
 
 import android.content.Intent;
 import android.os.Bundle;
@@ -81,7 +96,8 @@ public class CampaignAddActivity extends BaseSingleFragmentActivity implements O
 				getActionBar().setProgressVisible(false);
 			}
 			
-		}.execute(mSharedPreferencesHelper.getUsername(), mSharedPreferencesHelper.getHashedPassword());
+		}.execute(mSharedPreferencesHelper.getUsername(),
+				mSharedPreferencesHelper.getHashedPassword());
 	}
 	
 	@Override
@@ -93,7 +109,9 @@ public class CampaignAddActivity extends BaseSingleFragmentActivity implements O
 	
 	@Override
 	public void onCampaignActionDownload(String campaignUrn) {
-		new CampaignXmlDownloadTask(this, campaignUrn).execute(mSharedPreferencesHelper.getUsername(), mSharedPreferencesHelper.getHashedPassword());
+		new CampaignXmlDownloadTask(this, campaignUrn).
+		execute(mSharedPreferencesHelper.getUsername(), 
+				mSharedPreferencesHelper.getHashedPassword());
 	}
 
 	@Override

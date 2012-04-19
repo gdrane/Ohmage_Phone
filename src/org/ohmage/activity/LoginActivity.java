@@ -75,6 +75,7 @@ public class LoginActivity extends Activity {
 		
 		// first see if they are already logged in
 		final SharedPreferencesHelper preferencesHelper = new SharedPreferencesHelper(this);
+		preferencesHelper.putLoginTimeStamp(System.currentTimeMillis());
 		
 		if (preferencesHelper.isUserDisabled()) {
         	((OhmageApplication) getApplication()).resetAll();

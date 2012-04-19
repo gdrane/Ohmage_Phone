@@ -398,8 +398,10 @@ public class DataStream implements iDataStream, iState {
 		byte[] enc_key = si.getStreamKey();
 		byte[] stream_enc_key = _transport._encryptor.getEncryptKey();
 		if(Arrays.equals(enc_key, stream_enc_key))	{
+			Log.info("Stream status update was successful");
 			_is_setup = true;
 		} else {
+			Log.info("Stream status update was not successful");
 			_is_setup = false;
 		}
 	}

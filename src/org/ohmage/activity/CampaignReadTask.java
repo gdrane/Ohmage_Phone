@@ -50,7 +50,7 @@ class CampaignReadTask extends ManagedAsyncTask<String, Void, CampaignReadRespon
 		OhmageApi api = new OhmageApi(mContext);
 		CampaignReadResponse response = api.campaignRead(SharedPreferencesHelper.DEFAULT_SERVER_URL, username, hashedPassword, "android", "short", null);
 		if(response == null)
-			return response;
+			return null;
 		if (response.getResult() == Result.SUCCESS) {
 			ContentResolver cr = mContext.getContentResolver();
 			

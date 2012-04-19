@@ -422,6 +422,8 @@ public class GlobalConfig implements iState {
 	public static final int FEAT_MANAGE = 0x2;
 
 	public static final int FEAT_FILTERING = 0x4;
+	
+	public static final int FEAT_KEYSTORE = 0x8;
 
 	private static int _features = FEAT_SHARING;
 

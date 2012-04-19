@@ -17,6 +17,7 @@ package org.ohmage;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.util.Log;
 
 public class SharedPreferencesHelper {
 	
@@ -46,6 +47,7 @@ public class SharedPreferencesHelper {
 //	private static final String KEY_CAMPAIGN_NAME = "campaign_name";
 //	private static final String KEY_CAMPAIGN_URN = "campaign_version";
 //	private static final String KEY_SERVER_URL = "server_url";
+	private static final String KEY_LOGIN_TIMESTAMP = "login_timestamp";
 	
 	private final SharedPreferences mPreferences;
 	
@@ -69,6 +71,18 @@ public class SharedPreferencesHelper {
 		return mPreferences.edit().putInt(KEY_VERSION_CODE, versionCode).commit();
 	}
 	
+	public void putLoginTimeStamp(long timestamp) {
+		Log.i("Preferences", "Commit : " + timestamp);
+		if(mPreferences.edit().putLong(KEY_LOGIN_TIMESTAMP, timestamp).commit())
+			Log.i("Preferences", "success");
+		else 
+			Log.i("Preferences", "fail");
+	}
+	
+	public Long getLoginTimestamp() {
+		return mPreferences.getLong(KEY_LOGIN_TIMESTAMP, 0);
+	}
+	
 	public String getUsername() {
 		return mPreferences.getString(KEY_USERNAME, "amrutha.old");
 	}
@@ -78,7 +92,7 @@ public class SharedPreferencesHelper {
 	}
 	
 	public String getHashedPassword() {
-		return mPreferences.getString(KEY_PASSWORD_HASHED, "Amrutha.old1");
+		return mPreferences.getString(KEY_PASSWORD_HASHED, "$2a$13$/5p.iRo2yxEWkerkLQW8HO8LlUEUeNogbjCB9kAkPJ6qfsUmytNa6");
 	}
 	
 	public boolean putHashedPassword(String hashedPassword) {

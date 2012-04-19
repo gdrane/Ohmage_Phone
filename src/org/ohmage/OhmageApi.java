@@ -47,9 +47,6 @@ import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpConnectionParams;
 import org.apache.http.params.HttpParams;
 import org.apache.http.util.EntityUtils;
-import org.bson.BSONDecoder;
-import org.bson.BSONEncoder;
-import org.bson.BSONObject;
 import org.ccnx.ccn.config.SystemConfiguration;
 import org.ccnx.ccn.impl.support.DataUtils;
 import org.ccnx.ccn.protocol.ContentName;
@@ -84,6 +81,7 @@ public class OhmageApi {
 	private static final String CAMPAIGN_READ_PATH = "app/campaign/read";
 	private static final String SURVEYRESPONSE_READ_PATH = "app/survey_response/read";
 	private static final String IMAGE_READ_PATH = "app/image/read";
+	private static final int MAX_ATTEMPTS = 5;
 	
 	public OhmageApi(Context context) {
 		SharedPreferencesHelper prefs = new SharedPreferencesHelper(context);
@@ -422,13 +420,18 @@ public class OhmageApi {
 		}
 	}
 	
-	public CampaignReadResponse campaignRead(String serverUrl, String username, String hashedPassword, String client, String outputFormat, String campaignUrnList) {
+	public CampaignReadResponse campaignRead(String serverUrl, String username, 
+			String hashedPassword, String client, String outputFormat, 
+			String campaignUrnList) {
 		
 		final boolean GZIP = false;
 		
 		String url = serverUrl + CAMPAIGN_READ_PATH;
 		if(client == "android") {
-			if(!OhmagePDVManager.isListening())
+			Result result = Result.HTTP_ERROR;
+			String[] errorCodes = null;
+			Response candidate = new CampaignReadResponse();
+			if(OhmagePDVManager.getInstance() == null || !OhmagePDVManager.getInstance().isListening())
 				return null;
 			GlobalConfig config = GlobalConfig.getInstance();
 			PublisherPublicKeyDigest digest = OhmagePDVManager.getConfigurationDigest();
@@ -441,9 +444,8 @@ public class OhmageApi {
 					, hashedPassword);			
 			if(encrypted_data == null)
 				return null;
-			Log.i(TAG, "Base64encoded string : " + DataUtils.base64Encode(encrypted_data));
-		//	for(byte b : encrypted_data)
-			//	Log.i(TAG, "Byte : " + b);
+			Log.i(TAG, "Base64encoded string : " + 
+				new String(DataUtils.base64Encode(encrypted_data)));
 			
 			try {
 				ContentName campaignReadName = 
@@ -460,26 +462,39 @@ public class OhmageApi {
 				} else {
 					Log.i(TAG, "Content Object: " + co);
 				}
-				byte[] data = NDNUtils.decryptConfigData(co.content());
-				try {
-					JSONObject jsonObj = 
-							new JSONObject(new String(data));
-					CampaignReadResponse response = new CampaignReadResponse();
-					response.populateFromJSON(jsonObj);
-					return response;
-				} catch (JSONException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-				
-				
+					JSONObject rootJson = new JSONObject(new String(NDNUtils.
+							decryptConfigData(co.content())));
+					if (rootJson.getString("result").equals("success")) {
+						result = Result.SUCCESS;
+						
+						// allow the output type to determine how to extract 
+						// data from the json collection
+						candidate.populateFromJSON(rootJson);
+						
+					} else {
+						result = Result.FAILURE;
+						JSONArray errorsJsonArray = rootJson.getJSONArray("errors");
+						int errorCount = errorsJsonArray.length();
+						errorCodes = new String[errorCount];
+						for (int i = 0; i < errorCount; i++) {
+							errorCodes[i] = errorsJsonArray.getJSONObject(i).getString("code");
+						}
+					}
+					Log.i(TAG, rootJson.toString());
+					candidate.setResponseStatus(result, errorCodes);		
+					return (CampaignReadResponse)candidate;
+			} catch (JSONException e) {
+				Log.e(TAG, e.toString());
+				candidate.setResponseStatus(Result.INTERNAL_ERROR, null);
+				return (CampaignReadResponse) candidate;
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-			catch (MalformedContentNameStringException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				Log.e(TAG, e.toString());
+				candidate.setResponseStatus(Result.INTERNAL_ERROR, null);
+				return (CampaignReadResponse) candidate;
+			} catch (MalformedContentNameStringException e) {
+				Log.e(TAG, e.toString());
+				candidate.setResponseStatus(Result.INTERNAL_ERROR, null);
+				return (CampaignReadResponse) candidate;
 			}
 					
 		} else {
@@ -502,8 +517,6 @@ public class OhmageApi {
 				return candidate;
 			}
 		}
-		
-		return null;
 	}
 	
 	public CampaignXmlResponse campaignXmlRead(String serverUrl, String username, String hashedPassword, String client, String campaignUrn) {
@@ -513,28 +526,46 @@ public class OhmageApi {
 		String url = serverUrl + CAMPAIGN_READ_PATH;
 		
 		if(client.equals("android")) {
+			if(!OhmagePDVManager.getInstance().isListening())
+				return null;
 			GlobalConfig config = GlobalConfig.getInstance();
 			PublisherPublicKeyDigest digest = OhmagePDVManager.getConfigurationDigest();
 			ContentName keyName = OhmagePDVManager.getInstance().
 					getConfigKeyLocator();
 			KeyLocator locator = new KeyLocator(keyName, digest);
-			byte[] encrypted_data = 
-					NDNUtils.encryptConfigData(locator, 
-							username , hashedPassword);
+			if(hashedPassword == null)
+				Log.e(TAG, "Hashed password is null");
+			byte[] encrypted_data = NDNUtils.encryptConfigData(locator, username
+					, hashedPassword);			
+			if(encrypted_data == null)
+				return null;
+			Log.i(TAG, "Base64encoded string : " + 
+				new String(DataUtils.base64Encode(encrypted_data)));
 			try {
-				ContentName campaignXMLReadName = config.getRoot().
-						append(OhmagePDVManager.getAppInstance()).
+				ContentName campaignXMLReadName = 
+						ContentName.
+						fromURI("ccnx:/ndn/ucla.edu/apps/borges/ohmagepdv").
 						append("manage/campaign/read").append("xml").
-						append(campaignUrn).append(new String(DataUtils.base64Encode(encrypted_data))).
+						append(campaignUrn).
+						append(new String(DataUtils.base64Encode(encrypted_data))).
 						append(OhmagePDVManager.getHashedDeviceId());
+				Log.i(TAG, "XML Campaign Read Name : " + campaignXMLReadName);
 				ContentObject co = config.getCCNHandle().get(campaignXMLReadName, 
 						SystemConfiguration.LONG_TIMEOUT);
-				byte[] data = NDNUtils.decryptConfigData(co.content());
+				if(co == null) {
+					return null;
+				}
+				Log.i(TAG, co.toString());
+				// JSONObject resultJson = new JSONObject(new String(co.content()));
+				byte[] data = NDNUtils.decryptConfigData(
+						co.content());
+				Log.i(TAG, "Response Text : " + new String(data));
 				JSONObject returnedObject = new JSONObject(new String(data));
 				String xml = returnedObject.getString("xml_result");
 				// String campaignName = returnedObject.getString("campaign_name");
 				CampaignXmlResponse candidate = new CampaignXmlResponse();
 				candidate.setXml(xml);
+				candidate.setResponseStatus(Result.SUCCESS, null);
 				return candidate;
 				
 			} catch (MalformedContentNameStringException e) {

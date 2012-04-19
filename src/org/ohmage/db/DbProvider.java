@@ -115,7 +115,7 @@ public class DbProvider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		dbHelper = new StreamDbHelper(getContext());
+		dbHelper = new DbHelper(getContext());
 		return true;
 	}
 

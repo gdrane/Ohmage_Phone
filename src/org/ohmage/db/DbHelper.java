@@ -39,6 +39,7 @@ import org.ohmage.db.Models.Response;
 import org.ohmage.db.Models.Survey;
 import org.ohmage.db.Models.SurveyPrompt;
 import org.ohmage.db.Models.PromptResponse;
+import org.ohmage.pdc.OhmagePDVManager;
 import org.ohmage.service.SurveyGeotagService;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -297,7 +298,7 @@ public class DbHelper extends SQLiteOpenHelper {
 		clearAll(db);
 		// we also have to close it, since it's not a managed reference as with
 		// onUpgrade's db handle.
-		// db.close();
+		db.close();
 	}
 
 	// helper method that returns a hex-formatted string for some given input
@@ -639,6 +640,7 @@ public class DbHelper extends SQLiteOpenHelper {
 
 						curSurvey = new Survey();
 						curSurvey.mCampaignUrn = campaignUrn;
+
 					}
 					else if (tagName.equalsIgnoreCase("prompt")) {
 						SurveyPrompt sp = new SurveyPrompt();
@@ -737,6 +739,9 @@ public class DbHelper extends SQLiteOpenHelper {
 						// flush the prompts we've stored up so far
 						prompts.clear();
 
+						// Create Streams here
+						OhmagePDVManager.getInstance().
+						createStreamForSurvey(campaignUrn, curSurvey.mSurveyID);
 						// and clear us from being in any survey
 						curSurvey = null;
 					}

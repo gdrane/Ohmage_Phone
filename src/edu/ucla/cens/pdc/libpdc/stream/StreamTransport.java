@@ -181,19 +181,18 @@ public class StreamTransport {
 		assert interest != null;
 		assert arguments != null;
 		
-		String start = arguments.stringComponent(3);
-		String end = arguments.stringComponent(4);
+		String start = arguments.stringComponent(4);
+		String end = arguments.stringComponent(5);
 		// Content of the data packet
 		if (start.equals("0") && end.equals("0"))
 			ids = _stream.getStorage().getRangeIds();
 		else if (!start.equals("0") && end.equals("0"))
-			ids = _stream.getStorage().getRangeIds(arguments.stringComponent(0));
+			ids = _stream.getStorage().getRangeIds(start);
 		else
-			ids = _stream.getStorage().getRangeIds(arguments.stringComponent(0),
-					arguments.stringComponent(1));
+			ids = _stream.getStorage().getRangeIds(start, end);
 
 		data = StringUtil.join(ids, "\n");
-
+		Log.i(TAG, "List to be sent:" + data);
 		cipher = _encryptor.encryptData(data.getBytes());
 
 		return publishData(interest, cipher, 1);

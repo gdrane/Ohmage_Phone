@@ -10,6 +10,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import org.ohmage.NotificationHelper;
 import org.ohmage.OhmageApplication;
 import org.ohmage.SharedPreferencesHelper;
 import org.ohmage.db.DbContract.Campaigns;
@@ -25,10 +26,13 @@ import org.ohmage.service.SurveyGeotagService;
 
 import android.content.ContentResolver;
 import android.content.ContentValues;
+import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
+import android.util.Log;
 
 
+import edu.ucla.cens.mobility.glue.MobilityInterface;
 import edu.ucla.cens.pdc.libpdc.datastructures.DataRecord;
 import edu.ucla.cens.pdc.libpdc.exceptions.PDCDatabaseException;
 import edu.ucla.cens.pdc.libpdc.stream.Storage;
@@ -101,9 +105,179 @@ public class SQLiteDataStorage extends Storage {
 	public List<String> getRangeIds(String start, String end)
 			throws PDCDatabaseException {
 		String tablename = getTableName();
-		if(tablename == "MOBILITY_DATA_STREAM")
+		Log.i(TAG, "TableName: " + tablename);
+		if(tablename.equals("MOBILITY_DATA_STREAM"))
 		{
-			
+			Log.i(TAG, "Listing Table Name: " + tablename);
+			boolean uploadSensorData = true;
+			Context ctx = OhmagePDVManager.getInstance().
+					getAndroidApplication().
+					getApplicationContext();
+			SharedPreferencesHelper helper = new SharedPreferencesHelper(ctx);
+
+			String username = helper.getUsername();
+			String hashedPassword = helper.getHashedPassword();
+			long uploadAfterTimestamp = helper.getLastMobilityUploadTimestamp();
+			if (uploadAfterTimestamp == 0) {
+				uploadAfterTimestamp = helper.getLoginTimestamp();
+			}
+			Log.i(TAG, "asdsadads" + uploadAfterTimestamp);
+			Long now = System.currentTimeMillis();
+			Cursor c = MobilityInterface.getMobilityCursor(ctx, uploadAfterTimestamp);
+
+			// OhmageApi.UploadResponse response = new OhmageApi.UploadResponse(OhmageApi.Result.SUCCESS, null);
+			if(c == null) {
+				Log.i(TAG, "Cursor returned is null");
+			}
+			if (c != null && c.getCount() > 0) {
+
+				Log.i(TAG, "There are " + String.valueOf(c.getCount()) + " mobility points to upload.");
+
+				c.moveToFirst();
+
+				int remainingCount = c.getCount();
+				int limit = 60;
+
+				while (remainingCount > 0) {
+
+					if (remainingCount < limit) {
+						limit = remainingCount;
+					}
+
+					Log.i(TAG, "Attempting to upload a batch with " + String.valueOf(limit) + " mobility points.");
+
+					JSONArray mobilityJsonArray = new JSONArray();
+
+					for (int i = 0; i < limit; i++) {
+						JSONObject mobilityPointJson = new JSONObject();
+
+						try {
+							SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+							Long time = Long.parseLong(c.getString(c.getColumnIndex(MobilityInterface.KEY_TIME)));
+							if (i == limit - 1) {
+								uploadAfterTimestamp = time;
+							}
+
+							mobilityPointJson.put("id", c.getString(c.getColumnIndex(MobilityInterface.KEY_ROWID)));
+							mobilityPointJson.put("time", time);
+							mobilityPointJson.put("timezone", c.getString(c.getColumnIndex(MobilityInterface.KEY_TIMEZONE)));
+							if (uploadSensorData) {
+								mobilityPointJson.put("subtype", "sensor_data");
+								JSONObject dataJson = new JSONObject();
+								dataJson.put("mode", c.getString(c.getColumnIndex(MobilityInterface.KEY_MODE)));
+
+								try {
+									dataJson.put("speed", Float.parseFloat(c.getString(c.getColumnIndex(MobilityInterface.KEY_SPEED))));
+								} catch (NumberFormatException e) {
+									dataJson.put("speed", "NaN");
+								} catch (JSONException e) {
+									dataJson.put("speed", "NaN");
+								}
+
+								String accelDataString = c.getString(c.getColumnIndex(MobilityInterface.KEY_ACCELDATA));
+								if (accelDataString == null || accelDataString.equals("")) {
+									accelDataString = "[]";
+								}
+								dataJson.put("accel_data", new JSONArray(accelDataString));
+
+								String wifiDataString = c.getString(c.getColumnIndex(MobilityInterface.KEY_WIFIDATA));
+								if (wifiDataString == null || wifiDataString.equals("")) {
+									wifiDataString = "{}";
+								}
+								dataJson.put("wifi_data", new JSONObject(wifiDataString));
+
+								mobilityPointJson.put("data", dataJson);
+							} else {
+								mobilityPointJson.put("subtype", "mode_only");
+								mobilityPointJson.put("mode", c.getString(c.getColumnIndex(MobilityInterface.KEY_MODE)));
+							}
+							String locationStatus = c.getString(c.getColumnIndex(MobilityInterface.KEY_STATUS));
+							mobilityPointJson.put("location_status", locationStatus);
+							if (! locationStatus.equals(SurveyGeotagService.LOCATION_UNAVAILABLE)) {
+								JSONObject locationJson = new JSONObject();
+
+								try {
+									locationJson.put("latitude", Double.parseDouble(c.getString(c.getColumnIndex(MobilityInterface.KEY_LATITUDE))));
+								} catch (NumberFormatException e) {
+									locationJson.put("latitude", "NaN");
+								} catch (JSONException e) {
+									locationJson.put("latitude", "NaN");
+								}
+
+								try {
+									locationJson.put("longitude", Double.parseDouble(c.getString(c.getColumnIndex(MobilityInterface.KEY_LONGITUDE))));
+								} catch (NumberFormatException e) {
+									locationJson.put("longitude", "NaN");
+								}  catch (JSONException e) {
+									locationJson.put("longitude", "NaN");
+								}
+
+								locationJson.put("provider", c.getString(c.getColumnIndex(MobilityInterface.KEY_PROVIDER)));
+
+								try {
+									locationJson.put("accuracy", Float.parseFloat(c.getString(c.getColumnIndex(MobilityInterface.KEY_ACCURACY))));
+								} catch (NumberFormatException e) {
+									locationJson.put("accuracy", "NaN");
+								} catch (JSONException e) {
+									locationJson.put("accuracy", "NaN");
+								}
+
+								locationJson.put("time", Long.parseLong(c.getString(c.getColumnIndex(MobilityInterface.KEY_LOC_TIMESTAMP))));
+								locationJson.put("timezone", c.getString(c.getColumnIndex(MobilityInterface.KEY_TIMEZONE)));
+
+								mobilityPointJson.put("location", locationJson);
+							}
+
+						} catch (JSONException e) {
+							Log.e(TAG, "error creating mobility json", e);
+							// NotificationHelper.showMobilityErrorNotification(this);
+							throw new RuntimeException(e);
+						}
+						Log.i(TAG, mobilityPointJson.toString());
+						mobilityJsonArray.put(mobilityPointJson);
+
+						c.moveToNext();
+					}
+					SharedPreferencesHelper prefs = new SharedPreferencesHelper(ctx);
+					/*
+					response = mApi.mobilityUpload(Config.DEFAULT_SERVER_URL, username, hashedPassword, SharedPreferencesHelper.CLIENT_STRING, mobilityJsonArray.toString());
+
+					if (response.getResult().equals(OhmageApi.Result.SUCCESS)) {
+						Log.i(TAG, "Successfully uploaded " + String.valueOf(limit) + " mobility points.");
+						helper.putLastMobilityUploadTimestamp(uploadAfterTimestamp);
+						remainingCount -= limit;
+						Log.i(TAG, "There are " + String.valueOf(remainingCount) + " mobility points remaining to be uploaded.");
+
+						NotificationHelper.hideMobilityErrorNotification(this);
+					} else {
+						Log.e(TAG, "Failed to upload mobility points. Cancelling current round of mobility uploads.");
+
+						switch (response.getResult()) {
+						case FAILURE:
+							Log.e(TAG, "Upload failed due to error codes: " + Utilities.stringArrayToString(response.getErrorCodes(), ", "));
+							NotificationHelper.showMobilityErrorNotification(this);
+							break;
+
+						case INTERNAL_ERROR:
+							Log.e(TAG, "Upload failed due to unknown internal error");
+							NotificationHelper.showMobilityErrorNotification(this);
+							break;
+
+						case HTTP_ERROR:
+							Log.e(TAG, "Upload failed due to network error");
+							break;
+						}
+
+						break;						
+					}*/
+				}
+				
+
+				c.close();
+			} else {
+				Log.i(TAG, "No mobility points to upload.");
+			}
+
 			
 			
 		} else if(tablename == "SURVEY_DATA_STREAM")
@@ -405,5 +579,7 @@ public class SQLiteDataStorage extends Storage {
 	
 	// Id of the associated DataStream
 	private String _data_stream_id;
+	
+	private static final String TAG = "SQLiteDataStorage";
 	
 }

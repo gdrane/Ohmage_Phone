@@ -34,6 +34,9 @@ final public class PDVInstance implements CCNFilterListener {
 
 			if (GlobalConfig.hasFeature(GlobalConfig.FEAT_MANAGE))
 				add_generic_command(new ManageCommand());
+			
+			if (GlobalConfig.hasFeature(GlobalConfig.FEAT_KEYSTORE))
+				add_generic_command(new KeyStoreCommand());
 		}
 		catch (MalformedContentNameStringException ex) {
 			throw new Error("Unable to instantiate PDVInstance class", ex);

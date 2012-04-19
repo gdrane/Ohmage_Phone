@@ -3,9 +3,7 @@ package org.ohmage.pdc;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.logging.Level;
 
-import org.spongycastle.jce.provider.asymmetric.ec.KeyPairGenerator;
 import org.ccnx.android.ccnlib.CCNxConfiguration;
 import org.ccnx.android.ccnlib.CCNxServiceCallback;
 import org.ccnx.android.ccnlib.CCNxServiceControl;
@@ -13,9 +11,13 @@ import org.ccnx.android.ccnlib.CCNxServiceStatus.SERVICE_STATUS;
 import org.ccnx.android.ccnlib.CcndWrapper;
 import org.ccnx.android.ccnlib.CcndWrapper.CCND_OPTIONS;
 import org.ccnx.android.ccnlib.RepoWrapper.REPO_OPTIONS;
+import org.ccnx.ccn.config.SystemConfiguration;
+import org.ccnx.ccn.impl.support.DataUtils;
 import org.ccnx.ccn.profiles.ccnd.CCNDaemonException;
 import org.ccnx.ccn.profiles.ccnd.SimpleFaceControl;
 import org.ccnx.ccn.protocol.ContentName;
+import org.ccnx.ccn.protocol.ContentObject;
+import org.ccnx.ccn.protocol.KeyLocator;
 import org.ccnx.ccn.protocol.MalformedContentNameStringException;
 import org.ccnx.ccn.protocol.PublisherPublicKeyDigest;
 
@@ -23,6 +25,7 @@ import org.ohmage.OhmageApplication;
 import org.ohmage.SharedPreferencesHelper;
 import org.ohmage.pdc.storage.SQLiteConfigStorage;
 import org.ohmage.pdc.storage.SQLiteDataStorage;
+import org.ohmage.util.NDNUtils;
 
 import edu.ucla.cens.pdc.libpdc.core.GlobalConfig;
 import edu.ucla.cens.pdc.libpdc.core.PDVInstance;
@@ -54,7 +57,11 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 		_ohmage_application = app;
 		telephonyManager = (TelephonyManager)app.getSystemService(
 				Context.TELEPHONY_SERVICE);
-		DEVICE_ID = telephonyManager.getDeviceId();
+		if(telephonyManager.getDeviceId() != null)
+			DEVICE_ID = telephonyManager.getDeviceId();
+		 
+		Log.i(TAG, "Device Id "  + DEVICE_ID);
+
 	}
 	
 	public void InitializeCCNx(Context ctx) {
@@ -144,9 +151,9 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 		PublisherPublicKeyDigest digest = null;
 		try {
 			digest = new PublisherPublicKeyDigest(
-					"gdLbPbg1aXLg72inoAMlwLuANahIoa7u0lx1KvCqqaU=");
+					"cSlgis+jq1+GylAvS5ydmVx9HA3tPCMS3IUe3M+y7aI=");
 			_configuration_digest = new PublisherPublicKeyDigest(
-					"CgPgcOQGWbksHFmW8QJua331EKsV48v+F1J8qjZAJBc=");
+					"x6TZToNy1RA7b6gYajw6IUOTT6hbtHtKZMsGQzfakhQ=");
 			
 		} catch (IOException e2) {
 			// TODO Auto-generated catch block
@@ -157,6 +164,8 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 			//		org.ccnx.ccn.impl.support.Log.FAC_ALL, Level.FINE);
 
 			GlobalConfig config = GlobalConfig.loadState();
+			GlobalConfig.setFeatures(GlobalConfig.FEAT_MANAGE | 
+					GlobalConfig.FEAT_SHARING);
 			assert config == null;
 			if (config == null) {
 				Log.i(TAG,"Generating new config");
@@ -182,8 +191,7 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 				_stream.getTransport().getEncryptor().generateNewKey();
 				assert _stream != null;
 				_ohmage_application.addDataStream(_stream);
-				_pdc_receiver = new PDCReceiver(
-						_rec_url);
+				_pdc_receiver = new PDCReceiver(_rec_url);
 				_pdc_receiver.setPublickeyDigest(digest);
 				_stream.addReceiver(_pdc_receiver);
 				
@@ -223,6 +231,47 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 
 		_pdv_instance = new PDVInstance();
 		Log.i(TAG, "PDV Instance initialized");
+	}
+	
+	public void createStreamForSurvey(String campaignUrn, 
+			String surveyId) {
+		try {
+			GlobalConfig config = GlobalConfig.getInstance();
+			PDCReceiver pdc_receiver = new PDCReceiver(_rec_url);
+			SharedPreferencesHelper helper = new SharedPreferencesHelper(_ohmage_application.getApplicationContext());
+			String username = helper.getUsername();
+			String hashedPassword = helper.getHashedPassword();
+			String stream_name = hashingFunction(campaignUrn + ":" + 
+					surveyId + ":" + username);
+			KeyLocator locator = new KeyLocator(
+					pdc_receiver.uri.append("manage").
+					append("configuration_key"),
+					OhmagePDVManager.getConfigurationDigest());
+			String encryptedInfo = new String(DataUtils.base64Encode(
+					NDNUtils.encryptConfigData(locator, username, 
+							hashedPassword)));
+			DataStream ds = new DataStream(config.getCCNHandle(), 
+					_ohmage_application, stream_name, false);
+			ds.addReceiver(pdc_receiver);
+			_ohmage_application.addDataStream(ds);
+			ContentObject co = config.getCCNHandle().get(
+					pdc_receiver.uri.append(ds.data_stream_id).
+					append("control").append("recv_digest").
+					append(encryptedInfo).
+					append(OhmagePDVManager.getHashedDeviceId()) ,
+					SystemConfiguration.LONG_TIMEOUT);
+			if(co == null)
+				return;
+			pdc_receiver.setPublickeyDigest(
+					new PublisherPublicKeyDigest(new String(co.content())));	
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (MalformedContentNameStringException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
 	}
 	
 	public synchronized boolean startCCNx()
@@ -411,7 +460,7 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 	
 	// Accessors 
 	
-	public static boolean isListening() {
+	public boolean isListening() {
 		return _listening;
 	}
 	
@@ -478,8 +527,6 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 	private String _rec_url;
 
 	private PDVInstance _pdv_instance;
-	
-	private PDCReceiver _pdv_receiver;
 
 	private DataStream _stream;
 
@@ -491,7 +538,7 @@ public class OhmagePDVManager implements CCNxServiceCallback {
 	
 	private TelephonyManager telephonyManager = null;
 	
-	private static String DEVICE_ID = null;
+	private static String DEVICE_ID = "36318685E13900EC";
 	
 	private static final String app_instance = "androidclient";
 	

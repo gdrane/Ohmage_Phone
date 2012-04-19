@@ -136,7 +136,6 @@ public class UploadQueueActivity extends CampaignFilterActivity implements OnRes
 
 	@Override
 	public void onResponseActionUpload(Uri responseUri) {
-		
 		queueForUpload(responseUri);
 	}
 

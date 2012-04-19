@@ -29,6 +29,7 @@ public final class NDNActivity extends Activity implements
 	public void onCreate(Bundle savedInstanceState)
 	{
 		super.onCreate(savedInstanceState);
+	
 		setContentView(R.layout.ndn_settings);
 
 		Log.i(TAG, "onCreate()");
@@ -352,7 +353,7 @@ public final class NDNActivity extends Activity implements
 	private static final String DEFAULT_REC_URL = 
 			"ccnx:/ndn/ucla.edu/apps/borges/ohmagepdv";
 
-	private static final String DEFAULT_REMOTEHOST = "192.168.1.8";
+	private static final String DEFAULT_REMOTEHOST = "172.17.5.67";
 
 	private static final String DEFAULT_REMOTEPORT = "9695";
 	

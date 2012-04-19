@@ -53,7 +53,8 @@ class CampaignXmlDownloadTask extends ManagedAsyncTask<String, Void, CampaignXml
 		String hashedPassword = (String) params[1];
 		OhmageApi api = new OhmageApi(mContext);
 		CampaignXmlResponse response =  api.campaignXmlRead(SharedPreferencesHelper.DEFAULT_SERVER_URL, username, hashedPassword, "android", mCampaignUrn);
-		
+		if(response == null)
+			return null;
 		if (response.getResult() == Result.SUCCESS) {
 			
 			SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
